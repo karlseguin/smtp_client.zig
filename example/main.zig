@@ -1,22 +1,20 @@
 const std = @import("std");
-const Mailer = @import("smtp_client").Client;
+const smtp = @import("smtp_client");
 const Allocator = std.mem.Allocator;
 
 pub fn main() !void {
-	const address = try std.net.Address.parseIp("127.0.0.1", 1025);
-	const stream = try std.net.tcpConnectToAddress(address);
-	defer stream.close();
+	var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+	const allocator = gpa.allocator();
 
-	var client = try Mailer.init(stream, .{
-		.username = "username1",
-		.password = "password1",
-	});
-	defer client.quit() catch {};
+	var config = smtp.Config{
+		.tls = false,
+		.port = 1025,
+		.host = "localhost",
+	};
 
-	try client.hello();
-	try client.auth();
-	try client.from("admin@localhost");
-	try client.to(&.{"user@localhost"});
-	try client.data("Suject: Test\r\n\r\nThis is a test\r\n.\r\n");
-	// This example starts 3 separate servers
+	try smtp.send(allocator, .{
+		.from = "admin@localhsot",
+		.to = &.{"user@localhost"},
+		.data = "From: Admin <admin@localhost>\r\nTo: User <user@localhsot>\r\nSuject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
+	}, config);
 }

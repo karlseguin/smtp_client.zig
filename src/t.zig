@@ -57,6 +57,10 @@ pub const Stream = struct {
 		return self._received.items;
 	}
 
+	pub fn poll(_: Stream, _: i32) !usize {
+		return 1;
+	}
+
 	pub fn add(self: *Stream, value: []const u8) void {
 		self._to_read.appendSlice(value) catch unreachable;
 	}
