@@ -1,9 +1,8 @@
-SMTP Client for Zig
+# SMTP Client for Zig
 
-Zig currently only supports TLS 1.3, so this library will not work with all providers. Furthermore, the TLS implementation [has known issues](https://github.com/ziglang/zig/issues/14172)
+Zig only supports TLS 1.3. Furthermore, the TLS implementation [has known issues](https://github.com/ziglang/zig/issues/14172).
 
 This library does not work with Amazon SES as Amazon SES does not support TLS 1.3 (Amazon's documentation says that TLS 1.3 is supported with StartTLS but this does not appear to be the case (OpenSSL also reports an error)). 
-
 
 The library supports the `PLAIN`, `LOGIN` and `CRAM-MD5` mechanisms of the `AUTH` extension.
 
@@ -34,11 +33,10 @@ pub fn main() !void {
 }
 ```
 
-
 Note that the `data` field above must conform to [RFC 2822 - Internet Message Format](https://www.rfc-editor.org/rfc/rfc2822). Notably:
-* Lines, including \r\n have a maximum length of 1000.
-* Any line that beginning with a '.' must be escaped with a '.' (in regex talk: `s/^\./../`)
-* The message must be terminated with a \r\n.\r\n  (yes, the dot in there is intentional)
+* Lines have a maximum length of 1000 (including the trailing `\r\n`)
+* Any line that begins with a '.' must be escaped with a '.' (in regex talk: `s/^\./../`)
+* The message must be terminated with a `\r\n.\r\n`  (yes, the dot in there is intentional)
 
 I plan on adding some type of `builder` to help with generating a valid `data` payload.
 
