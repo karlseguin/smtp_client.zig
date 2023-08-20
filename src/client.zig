@@ -72,6 +72,18 @@ pub fn Client(comptime S: type) type {
 			}
 		}
 
+		pub fn startTLS(self: *Self) !void {
+			var buf = &self.buf;
+			@memcpy(buf[0..10], "STARTTLS\r\n");
+			try self.stream.writeAll(buf[0..10]);
+			const code = (try self.reader.read()).code;
+			if (code != 220) {
+				return errorFromCode(code);
+			}
+			try self.stream.toTLS(self.config.host, self.config.ca_bundle);
+			return self.hello();
+		}
+
 		pub fn auth(self: *Self) !void {
 			if (self.config.username == null) {
 				return;
@@ -165,6 +177,10 @@ pub fn Client(comptime S: type) type {
 		}
 
 		fn authPlain(self: *Self) !void {
+			if (self.config.encryption == .none) {
+				return error.InsecureAuth;
+			}
+
 			const config = &self.config;
 			const encoder = std.base64.standard.Encoder;
 
@@ -191,6 +207,10 @@ pub fn Client(comptime S: type) type {
 		}
 
 		fn authLogin(self: *Self) !void {
+			if (self.config.encryption == .none) {
+				return error.InsecureAuth;
+			}
+
 			var buf = &self.buf;
 			var reader = &self.reader;
 			const config = &self.config;

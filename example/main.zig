@@ -7,14 +7,14 @@ pub fn main() !void {
 	const allocator = gpa.allocator();
 
 	var config = smtp.Config{
-		.tls = false,
 		.port = 1025,
 		.host = "localhost",
+		.encryption = .none,
 	};
 
 	try smtp.send(allocator, .{
-		.from = "admin@localhsot",
+		.from = "admin@localhost",
 		.to = &.{"user@localhost"},
-		.data = "From: Admin <admin@localhost>\r\nTo: User <user@localhsot>\r\nSuject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
+		.data = "From: Admin <admin@localhost>\r\nTo: User <user@localhost>\r\nSuject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
 	}, config);
 }

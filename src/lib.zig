@@ -11,6 +11,8 @@ const reader = @import("reader.zig");
 pub const Reply = reader.Reply;
 pub const Reader = reader.Reader;
 
+pub const Stream = @import("stream.zig");
+
 pub const testing = @import("t.zig");
 
 test {
