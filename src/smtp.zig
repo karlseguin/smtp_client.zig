@@ -43,6 +43,18 @@ pub fn send(allocator: Allocator, message: Message, config: Config) !void {
 	return sendT(*Stream, &stream, message, config);
 }
 
+pub fn sendAll(allocator: Allocator, messages: []const Message, config: Config, sent: *usize) !void {
+	const net_stream = try std.net.tcpConnectToHost(allocator, config.host, config.port);
+	var stream = Stream.init(allocator, net_stream);
+	defer stream.deinit();
+
+	if (config.encryption == .tls) {
+		try stream.toTLS(config.host, config.ca_bundle);
+	}
+
+	return sendAllT(*Stream, &stream, messages, config, sent);
+}
+
 // done this way do we can call sendT in test and inject a mock stream object
 fn sendT(comptime S: type, stream: S, message: Message, config: Config) !void {
 	var c = try client.Client(S).init(stream, config);
@@ -56,6 +68,24 @@ fn sendT(comptime S: type, stream: S, message: Message, config: Config) !void {
 	try c.from(message.from);
 	try c.to(message.to);
 	try c.data(message.data);
+}
+
+fn sendAllT(comptime S: type, stream: S, messages: []const Message, config: Config, sent: *usize) !void {
+	var c = try client.Client(S).init(stream, config);
+	defer c.quit() catch {};
+
+	try c.hello();
+	if (config.encryption == .start_tls) {
+		try c.startTLS();
+	}
+	try c.auth();
+
+	for (messages) |message| {
+		try c.from(message.from);
+		try c.to(message.to);
+		try c.data(message.data);
+		sent.* += 1;
+	}
 }
 
 const t = @import("t.zig");
@@ -108,3 +138,70 @@ test "send: scram-md5 + multiple to" {
 		.password =  "ghanima",
 	});
 }
+
+test "sendAll: success" {
+	var ms = t.MockServer.init(&.{
+		.{.req = "EHLO localhost\r\n", .res = "250 Ok\r\n"},
+		.{.req = "MAIL FROM:<from-user1@localhost.local>\r\n", .res = "250\r\n"},
+		.{.req = "RCPT TO:<to-user1@localhost.local>\r\n", .res = "250\r\n"},
+		.{.req = "DATA\r\n", .res = "354\r\n"},
+		.{.req = "hi1\r\n", .res = "250\r\n"},
+		.{.req = "MAIL FROM:<from-user2@localhost.local>\r\n", .res = "250\r\n"},
+		.{.req = "RCPT TO:<to-user2@localhost.local>\r\n", .res = "250\r\n"},
+		.{.req = "DATA\r\n", .res = "354\r\n"},
+		.{.req = "hi2\r\n", .res = "250\r\n"},
+		.{.req = "QUIT\r\n", .res = null},
+	});
+
+	var sent: usize = 0;
+	try sendAllT(*t.MockServer, &ms, &.{
+		.{
+			.from = "from-user1@localhost.local",
+			.to = &.{"to-user1@localhost.local"},
+			.data =  "hi1\r\n",
+		},
+		.{
+			.from = "from-user2@localhost.local",
+			.to = &.{"to-user2@localhost.local"},
+			.data =  "hi2\r\n",
+		},
+	}, .{
+		.port = 0,
+		.host = "localhost",
+	}, &sent);
+
+	try t.expectEqual(2, sent);
+}
+
+test "sendAll: partial" {
+	var ms = t.MockServer.init(&.{
+		.{.req = "EHLO localhost\r\n", .res = "250 Ok\r\n"},
+		.{.req = "MAIL FROM:<from-user1@localhost.local>\r\n", .res = "250\r\n"},
+		.{.req = "RCPT TO:<to-user1@localhost.local>\r\n", .res = "250\r\n"},
+		.{.req = "DATA\r\n", .res = "354\r\n"},
+		.{.req = "hi1\r\n", .res = "250\r\n"},
+		.{.req = "MAIL FROM:<from-user2@localhost.local>\r\n", .res = "550\r\n"},
+		.{.req = "QUIT\r\n", .res = null},
+	});
+
+	var sent: usize = 0;
+	const err = sendAllT(*t.MockServer, &ms, &.{
+		.{
+			.from = "from-user1@localhost.local",
+			.to = &.{"to-user1@localhost.local"},
+			.data =  "hi1\r\n",
+		},
+		.{
+			.from = "from-user2@localhost.local",
+			.to = &.{"to-user2@localhost.local"},
+			.data =  "hi2\r\n",
+		},
+	}, .{
+		.port = 0,
+		.host = "localhost",
+	}, &sent);
+
+	try t.expectEqual(error.MailboxNotAvailable, err);
+	try t.expectEqual(1, sent);
+}
+

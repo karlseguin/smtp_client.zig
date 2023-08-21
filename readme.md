@@ -26,9 +26,9 @@ pub fn main() !void {
   };
 
   try smtp.send(allocator, .{
-    .from = "admin@localhsot",
+    .from = "admin@localhost",
     .to = &.{"user@localhost"},
-    .data = "From: Admin <admin@localhost>\r\nTo: User <user@localhsot>\r\nSuject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
+    .data = "From: Admin <admin@localhost>\r\nTo: User <user@localhost>\r\nSuject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
   }, config);
 }
 ```
@@ -51,3 +51,30 @@ Prefer using `.encryption = .tls` where possible. Most modern email vendors prov
 `.encryption = .insecure` will not use any encryption. In this mode, authentication via `LOGIN` or `PLAIN` will be allowed and passwords will be sent in plain text. 
 
 Regardless of the encryption setting, the library will favor authenticating via `CRAM-MD5` if the server supports it.
+
+
+## sendAll
+The `sendAll` function takes an array of `smtp.Message`. It is much more efficient than calling `send` in a loop.
+
+```
+  var config = smtp.Config{
+   // same configuration as send
+  };
+
+  var sent: usize = 0;
+  const messages = [_]smtp.Message{
+    .{
+      .from = "...",
+      .to = &.{"..."},
+      .data = "...",
+    },
+    .{
+      .from = "...",
+      .to = &.{"..."},
+      .data = "...",
+    }
+  };
+  try smtp.sendAll(allocator, &messages, config, &sent);
+```
+
+`sendAll` can fail part way, resulting in some messages being sent while others are not. `sendAll` stops at the first encountered error. The last parameter to `sendAll` is set to the number of successfully sent messages, thus it's possible for the caller to know which messages were and were not sent (e.g. if `sent == 3`, then messages 1, 2 and 3 were sent, message 4 failed and it, along with all subsequent messages, were not sent). Of course, when we say "successfully sent", we only mean from the point of view of this library. SMTP being asynchronous means that this library can successfully send the message to the configured upstream yet the message never reaches the final recipient(s).
