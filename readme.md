@@ -10,7 +10,6 @@ The library supports the `PLAIN`, `LOGIN` and `CRAM-MD5` mechanisms of the `AUTH
 ```zig
 const std = @import("std");
 const smtp = @import("smtp_client");
-const Allocator = std.mem.Allocator;
 
 pub fn main() !void {
   var gpa = std.heap.GeneralPurposeAllocator(.{}){};
