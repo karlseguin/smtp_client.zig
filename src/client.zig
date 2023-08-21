@@ -277,20 +277,23 @@ pub fn Client(comptime S: type) type {
 }
 
 fn findSupportedAuth(data: []const u8) ?AuthMode {
+	var maybe_auth: ?AuthMode = null;
 	var it = std.mem.splitScalar(u8, data, ' ');
+
 	while (it.next()) |value| {
 		if (std.ascii.eqlIgnoreCase(value, "CRAM-MD5")) {
 			return .CRAM_MD5;
 		}
-		if (std.ascii.eqlIgnoreCase(value, "PLAIN")) {
-			return .PLAIN;
+
+		if (std.ascii.eqlIgnoreCase(value, "PLAIN") and maybe_auth == null) {
+			maybe_auth = .PLAIN;
 		}
 		if (std.ascii.eqlIgnoreCase(value, "LOGIN")) {
-			return .LOGIN;
+			maybe_auth = .LOGIN;
 		}
 	}
 
-	return null;
+	return maybe_auth;
 }
 
 fn errorFromCode(code: u16) anyerror {
@@ -320,4 +323,125 @@ fn errorFromCode(code: u16) anyerror {
 	};
 }
 
-// const t = @import("t.zig");
+const t = @import("t.zig");
+test "client: init" {
+	const stream = t.Stream.init();
+	defer stream.deinit();
+
+	const config = testConfig(.{});
+
+	{
+		// wrong server init reply
+		stream.add("421 go away\r\n");
+		try t.expectError(error.ServiceNotAvailable, TestClient.init(stream, config));
+	}
+
+	{
+		// ok
+		stream.add("220 Hi\r\n");
+		_ = try TestClient.init(stream, config);
+	}
+}
+
+test "client: hello" {
+	const stream = t.Stream.init();
+	defer stream.deinit();
+
+	const config = testConfig(.{});
+
+	{
+		// wrong server reply
+		stream.add("220\r\n502 nope\r\n");
+		var client = try TestClient.init(stream, config);
+		try t.expectError(error.CommandNotImplemented, client.hello());
+	}
+
+	{
+		// no exstensions
+		stream.add("220\r\n250\r\n");
+		var client = try TestClient.init(stream, config);
+		try client.hello();
+		try t.expectEqual(false, client.ext_smtp_utf8);
+		try t.expectEqual(false, client.ext_8_bit_mine);
+		try t.expectEqual(null, client.ext_auth);
+	}
+
+	{
+		// SMTPUTF8
+		stream.add("220\r\n250-\r\n250 SMTPUTF8\r\n");
+		var client = try TestClient.init(stream, config);
+		try client.hello();
+		try t.expectEqual(true, client.ext_smtp_utf8);
+		try t.expectEqual(false, client.ext_8_bit_mine);
+		try t.expectEqual(null, client.ext_auth);
+	}
+
+	{
+		// 8BITMIME
+		stream.add("220\r\n250-\r\n250 8BITMIME\r\n");
+		var client = try TestClient.init(stream, config);
+		try client.hello();
+		try t.expectEqual(false, client.ext_smtp_utf8);
+		try t.expectEqual(true, client.ext_8_bit_mine);
+		try t.expectEqual(null, client.ext_auth);
+	}
+
+	{
+		// CRAM-MD5
+		stream.add("220\r\n250-\r\n250 AUTH LOGIN PLAIN CRAM-MD5\r\n");
+		var client = try TestClient.init(stream, config);
+		try client.hello();
+		try t.expectEqual(false, client.ext_smtp_utf8);
+		try t.expectEqual(false, client.ext_8_bit_mine);
+		try t.expectEqual(.CRAM_MD5, client.ext_auth);
+	}
+
+	{
+		// Login
+		stream.add("220\r\n250-\r\n250 AUTH LOGIN PLAIN\r\n");
+		var client = try TestClient.init(stream, config);
+		try client.hello();
+		try t.expectEqual(.LOGIN, client.ext_auth);
+	}
+
+	{
+		// Plain
+		stream.add("220\r\n250 Auth PlAIN\r\n");
+		var client = try TestClient.init(stream, config);
+		try client.hello();
+		try t.expectEqual(.PLAIN, client.ext_auth);
+	}
+}
+
+test "client: auth" {
+	const stream = t.Stream.init();
+	defer stream.deinit();
+
+	{
+		// cannot use PLAIN auth with unencrypted connection
+		stream.add("220\r\n250 AUTH PLAIN\r\n");
+		var client = try TestClient.init(stream, testConfig(.{.encryption = .none, .username = "leto"}));
+		try client.hello();
+		try t.expectError(error.InsecureAuth, client.auth());
+	}
+
+	{
+		// cannot use LOGIN auth with unencrypted connection
+		stream.add("220\r\n250 AUTH LOGIN\r\n");
+		var client = try TestClient.init(stream, testConfig(.{.encryption = .none, .username = "leto"}));
+		try client.hello();
+		try t.expectError(error.InsecureAuth, client.auth());
+	}
+}
+
+const TestClient = Client(*t.Stream);
+fn testConfig(config: anytype) Config {
+	const T = @TypeOf(config);
+	return .{
+		.port = 1025,
+		.host = "127.0.0.1",
+		.encryption = if (@hasField(T, "encryption")) config.encryption else .none,
+		.username = if (@hasField(T, "username")) config.username else null,
+		.password = if (@hasField(T, "password")) config.password else null,
+	};
+}

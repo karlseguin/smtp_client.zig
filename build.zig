@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) !void {
 	{
 		// tests
 		const lib_test = b.addTest(.{
-			.root_source_file = .{ .path = "src/lib.zig" },
+			.root_source_file = .{ .path = "src/smtp.zig" },
 			.target = target,
 			.optimize = optimize,
 		});

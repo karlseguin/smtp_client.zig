@@ -108,3 +108,55 @@ pub const Stream = struct {
 		self.closed = true;
 	}
 };
+
+
+pub const MockServer = struct {
+	index: ?usize,
+	req_res: []const ReqRes,
+
+	pub fn init(req_res: []const ReqRes) MockServer {
+		return .{
+			.index = null,
+			.req_res = req_res,
+		};
+	}
+
+	pub fn toTLS(_: *MockServer, _: []const u8, _: ?std.crypto.Certificate.Bundle) !void {
+		@panic("not implemented");
+	}
+
+	pub fn poll(_: MockServer, _: i32) !usize {
+		return 1;
+	}
+
+	pub fn read(self: *MockServer, buf: []u8) !usize {
+		const index = self.index orelse {
+			// in SMTP, the server sends the initial data.
+			@memcpy(buf[0..5], "220\r\n");
+			self.index = 0;
+			return 5;
+		};
+
+		const rr = self.req_res[index];
+		if (rr.res) |res| {
+			@memcpy(buf[0..res.len], res);
+			self.index = index + 1;
+			return res.len;
+		}
+		@panic("unexpected read");
+	}
+
+	// store messages that are written to the stream
+	pub fn writeAll(self: *MockServer, data: []const u8) !void {
+		const index = self.index orelse {
+			@panic("received data before server initiated connection");
+		};
+
+		try expectString(data, self.req_res[index].req);
+	}
+
+	const ReqRes = struct {
+		req: []const u8,
+		res: ?[]const u8,
+	};
+};

@@ -196,7 +196,7 @@ test "reader: buffered" {
 
 test "reader: read fuzz" {
 	// stream randomly fragments the data into N reads
-	for (0..100) |_| {
+	for (0..500) |_| {
 		const stream = t.Stream.init();
 		defer stream.deinit();
 
@@ -210,7 +210,7 @@ test "reader: read fuzz" {
 		stream.add("301-even more data\r\n");
 		stream.add("301\r\n");
 
-		var reader = Reader(*t.Stream).init(stream, 0);
+		var reader = Reader(*t.Stream).init(stream, 10);
 		try expectReply(try reader.read(), 100, false, "");
 		try expectReply(try reader.read(), 101, false, "a");
 		try expectReply(try reader.read(), 200, false, "this is a bit longer");
@@ -221,6 +221,16 @@ test "reader: read fuzz" {
 		try expectReply(try reader.read(), 301, true, "even more data");
 		try expectReply(try reader.read(), 301, false, "");
 	}
+}
+
+test "reader: closed" {
+	const stream = t.Stream.init();
+	defer stream.deinit();
+	stream.add("100\r\n200-hello\r");
+
+	var reader = Reader(*t.Stream).init(stream, 10);
+	try expectReply(try reader.read(), 100, false, "");
+	try t.expectError(error.Closed, reader.read());
 }
 
 fn expectReply(reply: Reply, expected_code: u16, expected_more: bool, expected_data: []const u8) !void {
