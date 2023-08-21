@@ -55,7 +55,7 @@ Regardless of the encryption setting, the library will favor authenticating via 
 ### Tip 1 - sendAll
 The `sendAll` function takes an array of `smtp.Message`. It is much more efficient than calling `send` in a loop.
 
-```
+```zig
   var config = smtp.Config{
    // same configuration as send
   };
@@ -106,13 +106,13 @@ Every call to `send` and `sendAll` requires a DNS lookup on `config.host`. The `
 
 ### Allocator
 `config.allocator` is required in two cases:
-1 - `send` or `sendAll` are used, OR
-2 - `config.ca_bundle` is not specified and `.tls` or `.start_tls` are used
+1. `send` or `sendAll` are used, OR
+2. `config.ca_bundle` is not specified and `.tls` or `.start_tls` are used
 
 Put differently, `config.allocator` can be null when both these cases are true:
-1 - `sendTo` or `sendAllTo` are used, AND
-2 - `config.ca_bundle` is provided or `.encryption` is set to `.none` or `.insecure`.
+1. `sendTo` or `sendAllTo` are used, AND
+2. `config.ca_bundle` is provided or `.encryption` is set to `.none` or `.insecure`.
 
-Put differently again, `config.allocator` is only used by the library to (a) call `std.net.tcpConnectToHost` which does an DNS lookup and (b) manage the `std.crypto.Certificate.Bundle`.
+Put differently again, `config.allocator` is only used by the library to (a) call `std.net.tcpConnectToHost` which does a DNS lookup and (b) manage the `std.crypto.Certificate.Bundle`.
 
 If `config.allocator` is required but not specified, the code will return an error.
