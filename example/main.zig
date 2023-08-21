@@ -10,9 +10,10 @@ pub fn main() !void {
 		.port = 1025,
 		.host = "localhost",
 		.encryption = .none,
+		.allocator = allocator,
 	};
 
-	try smtp.send(allocator, .{
+	try smtp.send(.{
 		.from = "admin@localhost",
 		.to = &.{"user@localhost"},
 		.data = "From: Admin <admin@localhost>\r\nTo: User <user@localhost>\r\nSuject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",

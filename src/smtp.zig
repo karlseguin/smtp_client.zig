@@ -15,7 +15,7 @@ pub const Encryption = enum {
 };
 
 pub const Config = struct {
-	port: u16,
+	port: u16 = 25,
 	host: []const u8,
 	timeout: i32 = 10_000,
 	encryption: Encryption = .tls,
@@ -23,6 +23,7 @@ pub const Config = struct {
 	password: ?[]const u8 = null,
 	local_name: []const u8 = "localhost",
 	ca_bundle: ?Bundle = null,
+	allocator: ?Allocator = null,
 };
 
 pub const Message = struct {
@@ -31,51 +32,43 @@ pub const Message = struct {
 	data: []const u8,
 };
 
-pub fn send(allocator: Allocator, message: Message, config: Config) !void {
-	const net_stream = try std.net.tcpConnectToHost(allocator, config.host, config.port);
-	var stream = Stream.init(allocator, net_stream);
-	defer stream.deinit();
-
-	if (config.encryption == .tls) {
-		try stream.toTLS(config.host, config.ca_bundle);
-	}
-
-	return sendT(*Stream, &stream, message, config);
+pub fn send(message: Message, config: Config) !void {
+	var count: usize = 0;
+	return sendAll(&[_]Message{message}, config, &count);
 }
 
-pub fn sendAll(allocator: Allocator, messages: []const Message, config: Config, sent: *usize) !void {
+pub fn sendAll(messages: []const Message, config: Config, sent: *usize) !void {
+	const allocator = config.allocator orelse return error.AllocatorRequired;
 	const net_stream = try std.net.tcpConnectToHost(allocator, config.host, config.port);
-	var stream = Stream.init(allocator, net_stream);
+	var stream = Stream.init(net_stream);
 	defer stream.deinit();
+	return sendAllT(*Stream, &stream, messages, config, sent);
+}
 
-	if (config.encryption == .tls) {
-		try stream.toTLS(config.host, config.ca_bundle);
-	}
+pub fn sendTo(address: std.net.Address, message: Message, config: Config) !void {
+	var count: usize = 0;
+	return sendAllTo(address, &[_]Message{message}, config, &count);
+}
 
+pub fn sendAllTo(address: std.net.Address, messages: []const Message, config: Config, sent: *usize) !void {
+	const net_stream = try std.net.tcpConnectToAddress(address);
+	var stream = Stream.init(net_stream);
+	defer stream.deinit();
 	return sendAllT(*Stream, &stream, messages, config, sent);
 }
 
 // done this way do we can call sendT in test and inject a mock stream object
-fn sendT(comptime S: type, stream: S, message: Message, config: Config) !void {
-	var c = try client.Client(S).init(stream, config);
-	defer c.quit() catch {};
-
-	try c.hello();
-	if (config.encryption == .start_tls) {
-		try c.startTLS();
-	}
-	try c.auth();
-	try c.from(message.from);
-	try c.to(message.to);
-	try c.data(message.data);
-}
-
 fn sendAllT(comptime S: type, stream: S, messages: []const Message, config: Config, sent: *usize) !void {
+	const encryption = config.encryption;
+	if (encryption == .tls) {
+		try stream.toTLS(&config);
+	}
+
 	var c = try client.Client(S).init(stream, config);
 	defer c.quit() catch {};
 
 	try c.hello();
-	if (config.encryption == .start_tls) {
+	if (encryption == .start_tls) {
 		try c.startTLS();
 	}
 	try c.auth();
@@ -104,14 +97,16 @@ test "send: unencrypted single to" {
 		.{.req = "QUIT\r\n", .res = null},
 	});
 
-	try sendT(*t.MockServer, &ms, .{
+	var count: usize = 0;
+	try sendAllT(*t.MockServer, &ms, &.{.{
 		.from = "from-user@localhost.local",
 		.to = &.{"to-user@localhost.local"},
 		.data = "This is the data\r\n.\r\n",
-	}, .{
+	}}, .{
 		.port = 0,
 		.host = "localhost",
-	});
+	}, &count);
+	try t.expectEqual(1, count);
 }
 
 test "send: scram-md5 + multiple to" {
@@ -127,16 +122,18 @@ test "send: scram-md5 + multiple to" {
 		.{.req = "QUIT\r\n", .res = null},
 	});
 
-	try sendT(*t.MockServer, &ms, .{
+	var count: usize = 0;
+	try sendAllT(*t.MockServer, &ms, &.{.{
 		.from = "from-user@localhost.local",
 		.to = &.{"to-user1@localhost.local", "to-user2@localhost.local"},
 		.data =  "hi\r\n",
-	}, .{
+	}}, .{
 		.port = 0,
 		.host = "localhost",
 		.username = "leto",
 		.password =  "ghanima",
-	});
+	}, &count);
+	try t.expectEqual(1, count);
 }
 
 test "sendAll: success" {

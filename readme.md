@@ -6,7 +6,6 @@ This library does not work with Amazon SES as Amazon SES does not support TLS 1.
 
 The library supports the `PLAIN`, `LOGIN` and `CRAM-MD5` mechanisms of the `AUTH` extension.
 
-If you're only sending occasional emails, using `smtp.send` as shown should be sufficient. The `Mailer` (TODO) provides a more efficient mechanism for sending multiple mails.
 
 ```zig
 const std = @import("std");
@@ -52,8 +51,8 @@ Prefer using `.encryption = .tls` where possible. Most modern email vendors prov
 
 Regardless of the encryption setting, the library will favor authenticating via `CRAM-MD5` if the server supports it.
 
-
-## sendAll
+## Performance
+### Tip 1 - sendAll
 The `sendAll` function takes an array of `smtp.Message`. It is much more efficient than calling `send` in a loop.
 
 ```
@@ -78,3 +77,42 @@ The `sendAll` function takes an array of `smtp.Message`. It is much more efficie
 ```
 
 `sendAll` can fail part way, resulting in some messages being sent while others are not. `sendAll` stops at the first encountered error. The last parameter to `sendAll` is set to the number of successfully sent messages, thus it's possible for the caller to know which messages were and were not sent (e.g. if `sent == 3`, then messages 1, 2 and 3 were sent, message 4 failed and it, along with all subsequent messages, were not sent). Of course, when we say "successfully sent", we only mean from the point of view of this library. SMTP being asynchronous means that this library can successfully send the message to the configured upstream yet the message never reaches the final recipient(s).
+
+### Tip 2 - CA Bundle
+If you're using TLS encryption (via either `.encryption = .tls` or `.encryption = .start_tls`), you can improve performance by providing your own CA bundle. When `send` or `sendAll` are called without a configured `ca_bundle`, one is created on each call, which involves reading and parsing your OS' root certificates from disk (again, on every call).
+
+You can create a certificate bundle on app start, using: 
+
+```zig
+var ca_bundle = std.crypto.Certificate.Bundle{}
+try ca_bundle.rescan(allocator);
+defer ca_bundle.deinit(allocator);
+```
+
+And then pass the bundle to `send` or `sendAll`:
+
+```zig
+var config = smtp.Config{
+  .port = 25,
+  .host = "localhost",
+  .encryption = .tls,
+  .ca_bundle = ca_bundle,  
+  // ...
+};
+```
+
+### Tip 3 - Skip DNS Resolution
+Every call to `send` and `sendAll` requires a DNS lookup on `config.host`. The `sendTo` and `sendAllTo` functions, which take an `std.net.Address`, can be used instead. When using these functions, `config.host` must still be set to the valid host when `.tls` or `.start_tls` is used.
+
+### Allocator
+`config.allocator` is required in two cases:
+1 - `send` or `sendAll` are used, OR
+2 - `config.ca_bundle` is not specified and `.tls` or `.start_tls` are used
+
+Put differently, `config.allocator` can be null when both these cases are true:
+1 - `sendTo` or `sendAllTo` are used, AND
+2 - `config.ca_bundle` is provided or `.encryption` is set to `.none` or `.insecure`.
+
+Put differently again, `config.allocator` is only used by the library to (a) call `std.net.tcpConnectToHost` which does an DNS lookup and (b) manage the `std.crypto.Certificate.Bundle`.
+
+If `config.allocator` is required but not specified, the code will return an error.

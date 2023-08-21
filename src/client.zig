@@ -80,7 +80,7 @@ pub fn Client(comptime S: type) type {
 			if (code != 220) {
 				return errorFromCode(code);
 			}
-			try self.stream.toTLS(self.config.host, self.config.ca_bundle);
+			try self.stream.toTLS(&self.config);
 			return self.hello();
 		}
 

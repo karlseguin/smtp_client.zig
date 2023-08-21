@@ -1,6 +1,7 @@
 // Internal helpers used by this library
 // If you're looking for helpers to help you mock/test
 const std = @import("std");
+const lib = @import("lib.zig");
 
 const mem = std.mem;
 const ArrayList = std.ArrayList;
@@ -121,8 +122,8 @@ pub const MockServer = struct {
 		};
 	}
 
-	pub fn toTLS(_: *MockServer, _: []const u8, _: ?std.crypto.Certificate.Bundle) !void {
-		@panic("not implemented");
+	pub fn toTLS(_: *MockServer, _: *const lib.Config) !void {
+		// noop
 	}
 
 	pub fn poll(_: MockServer, _: i32) !usize {

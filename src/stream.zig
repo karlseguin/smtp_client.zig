@@ -1,15 +1,18 @@
 const std = @import("std");
+const lib = @import("lib.zig");
 
 const os = std.os;
 const net = std.net;
 const tls = std.crypto.tls;
 
+const Config = lib.Config;
 const Allocator = std.mem.Allocator;
 const Bundle = std.crypto.Certificate.Bundle;
 
 pub const Stream = struct {
-	// kept around just for ca_bundle
-	allocator: Allocator,
+	// not null if we own ca_bundle
+	allocator: ?Allocator,
+
 	// not null if we own this and have to manage/release it
 	ca_bundle: ?Bundle,
 
@@ -17,12 +20,12 @@ pub const Stream = struct {
 	stream: net.Stream,
 	tls_client: ?tls.Client,
 
-	pub fn init(allocator: Allocator, stream: net.Stream) Stream {
+	pub fn init(stream: net.Stream) Stream {
 		return .{
 			.ca_bundle = null,
+			.allocator = null,
 			.tls_client = null,
 			.stream = stream,
-			.allocator = allocator,
 			.pfd = [1]os.pollfd{os.pollfd{
 				.fd = stream.handle,
 				.events = os.POLL.IN,
@@ -36,19 +39,21 @@ pub const Stream = struct {
 			_ = tls_client.writeEnd(self.stream, "", true) catch {};
 		}
 		if (self.ca_bundle) |*ca_bundle| {
-			ca_bundle.deinit(self.allocator);
+			ca_bundle.deinit(self.allocator.?);
 		}
 		self.stream.close();
 	}
 
-	pub fn toTLS(self: *Stream, host: []const u8, ca_bundle: ?Bundle) !void {
-		const bundle = ca_bundle orelse blk: {
+	pub fn toTLS(self: *Stream, config: *const Config) !void {
+		const bundle = config.ca_bundle orelse blk: {
+			const allocator = config.allocator orelse return error.AllocatorRequired;
 			var b = Bundle{};
-			try b.rescan(self.allocator);
+			try b.rescan(allocator);
 			self.ca_bundle = b;
+			self.allocator = allocator;
 			break :blk b;
 		};
-		self.tls_client = try tls.Client.init(self.stream, bundle, host);
+		self.tls_client = try tls.Client.init(self.stream, bundle, config.host);
 	}
 
 	pub fn poll(self: *Stream, timeout: i32) !usize {
