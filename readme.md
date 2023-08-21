@@ -20,11 +20,12 @@ pub fn main() !void {
     .port = 25,
     .encryption = .none,
     .host = "localhost",
+    .allocator = allocator,
     // .username="username",
     // .password="password",
   };
 
-  try smtp.send(allocator, .{
+  try smtp.send(.{
     .from = "admin@localhost",
     .to = &.{"user@localhost"},
     .data = "From: Admin <admin@localhost>\r\nTo: User <user@localhost>\r\nSuject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
@@ -73,7 +74,7 @@ The `sendAll` function takes an array of `smtp.Message`. It is much more efficie
       .data = "...",
     }
   };
-  try smtp.sendAll(allocator, &messages, config, &sent);
+  try smtp.sendAll(&messages, config, &sent);
 ```
 
 `sendAll` can fail part way, resulting in some messages being sent while others are not. `sendAll` stops at the first encountered error. The last parameter to `sendAll` is set to the number of successfully sent messages, thus it's possible for the caller to know which messages were and were not sent (e.g. if `sent == 3`, then messages 1, 2 and 3 were sent, message 4 failed and it, along with all subsequent messages, were not sent). Of course, when we say "successfully sent", we only mean from the point of view of this library. SMTP being asynchronous means that this library can successfully send the message to the configured upstream yet the message never reaches the final recipient(s).
