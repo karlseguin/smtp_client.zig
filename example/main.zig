@@ -6,7 +6,7 @@ pub fn main() !void {
 	var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 	const allocator = gpa.allocator();
 
-	var config = smtp.Config{
+	const config = smtp.Config{
 		.port = 1025,
 		.host = "localhost",
 		.encryption = .none,
