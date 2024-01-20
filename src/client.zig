@@ -43,7 +43,7 @@ pub fn Client(comptime S: type) type {
 		}
 
 		pub fn hello(self: *Self) !void {
-			var buf = &self.buf;
+			const buf = &self.buf;
 			var reader = &self.reader;
 
 			const msg = try std.fmt.bufPrint(buf, "EHLO {s}\r\n", .{self.config.local_name});

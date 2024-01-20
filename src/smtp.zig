@@ -201,4 +201,3 @@ test "sendAll: partial" {
 	try t.expectEqual(error.MailboxNotAvailable, err);
 	try t.expectEqual(1, sent);
 }
-
