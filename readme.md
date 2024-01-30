@@ -11,8 +11,8 @@ Add this to your build.zig.zon
 
 ```zig
 .dependencies = .{
-    .string = .{
-        .url = "https://github.com/JakubSzark/zig-string/archive/refs/heads/master.tar.gz",
+    .smtp_client = .{
+        .url = "https://github.com/karlseguin/smtp_client.zig/archive/refs/heads/master.tar.gz",
         //the correct hash will be suggested by zig
     }
 }
@@ -22,11 +22,11 @@ Add this to your build.zig.zon
 And add this to you build.zig.zon
 
 ```zig
-    const string = b.dependency("string", .{
+    const smtp_client = b.dependency("smtp_client", .{
         .target = target,
         .optimize = optimize,
     });
-    exe.addModule("string", string.module("string"));
+    exe.addModule("smtp_client", string.module("smtp_client"));
 
 ```
 
