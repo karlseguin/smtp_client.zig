@@ -30,7 +30,7 @@ And add this to you build.zig.zon
 
 ```
 
-#Basic Usage
+# Basic Usage
 
 ```zig
 const std = @import("std");
