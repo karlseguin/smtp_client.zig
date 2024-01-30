@@ -4,6 +4,10 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const smtp_module = b.addModule("smtp_client", .{
+        .source_file = .{ .path = "src/smtp.zig" },
+    });
+
     {
         // example
         const exe = b.addExecutable(.{
@@ -12,13 +16,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
-        const smtp_client = b.dependency("smtp_client", .{
-            .target = target,
-            .optimize = optimize,
-        });
-        exe.addModule("smtp_client", smtp_client.module("smtp_client"));
-
-        // exe.root_module.addImport("smtp_client", smtp_module);
+        exe.addModule("smtp_client", smtp_module);
         b.installArtifact(exe);
 
         const run_cmd = b.addRunArtifact(exe);
