@@ -1,12 +1,11 @@
 const std = @import("std");
+const FileSource = @import("std").build.FileSource;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const smtp_module = b.addModule("smtp_client", .{
-        .source_file = .{ .path = "src/smtp.zig" },
-    });
+    const smtp_module = b.addModule("smtp_module", .{ .source_file = FileSource.relative("src/smtp.zig") });
 
     {
         // example
