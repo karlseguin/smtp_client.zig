@@ -6,6 +6,31 @@ This library does not work with Amazon SES as Amazon SES does not support TLS 1.
 
 The library supports the `PLAIN`, `LOGIN` and `CRAM-MD5` mechanisms of the `AUTH` extension.
 
+# Installation
+Add this to your build.zig.zon
+
+```zig
+.dependencies = .{
+    .smtp_client = .{
+        .url = "https://github.com/karlseguin/smtp_client.zig/archive/refs/heads/master.tar.gz",
+        //the correct hash will be suggested by zig
+    }
+}
+
+```
+
+And add this to you build.zig.zon
+
+```zig
+    const smtp_client = b.dependency("smtp_client", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.addModule("smtp_client", string.module("smtp_client"));
+
+```
+
+# Basic Usage
 
 ```zig
 const std = @import("std");

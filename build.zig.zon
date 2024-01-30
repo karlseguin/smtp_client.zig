@@ -1,0 +1,5 @@
+.{
+    .name = "smtp_client",
+    .version = "0.0.1",
+    .paths = .{""},
+}

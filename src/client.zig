@@ -115,7 +115,7 @@ pub fn Client(comptime S: type) type {
 			}
 
 			if (self.ext_smtp_utf8) {
-				end = pos + 13;
+				end = pos + 11;
 				@memcpy(buf[pos..end], " SMTPUTF8\r\n");
 			} else {
 				buf[pos] = '\r';
