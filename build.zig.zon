@@ -1,1 +1,5 @@
-
+.{
+    .name = "smtp_client.zig",
+    .version = "0.0.1",
+  
+}
