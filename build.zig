@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const smtp_module = b.addModule("smtp_module", .{ .source_file = FileSource.relative("src/smtp.zig") });
+    const smtp_client = b.addModule("smtp_client", .{ .source_file = FileSource.relative("src/smtp.zig") });
 
     {
         // example
@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
-        exe.addModule("smtp_client", smtp_module);
+        exe.addModule("smtp_client", smtp_client);
         b.installArtifact(exe);
 
         const run_cmd = b.addRunArtifact(exe);
