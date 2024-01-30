@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) !void {
 	const optimize = b.standardOptimizeOption(.{});
 
 	const smtp_module = b.addModule("smtp_client", .{
-		.root_source_file = .{ .path = "src/smtp.zig" },
+		.source_file = .{ .path = "src/smtp.zig" },
 	});
 
 	{
