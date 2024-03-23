@@ -29,7 +29,7 @@ pub const Stream = struct {
 
 	pub fn init() *Stream {
 		var seed: u64 = undefined;
-		std.os.getrandom(std.mem.asBytes(&seed)) catch unreachable;
+		std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
 
 		const s = allocator.create(Stream) catch unreachable;
 		s.* = .{

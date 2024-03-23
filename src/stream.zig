@@ -1,8 +1,8 @@
 const std = @import("std");
 const lib = @import("lib.zig");
 
-const os = std.os;
 const net = std.net;
+const posix = std.posix;
 const tls = std.crypto.tls;
 
 const Config = lib.Config;
@@ -16,7 +16,7 @@ pub const Stream = struct {
 	// not null if we own this and have to manage/release it
 	ca_bundle: ?Bundle,
 
-	pfd: [1]os.pollfd,
+	pfd: [1]posix.pollfd,
 	stream: net.Stream,
 	tls_client: ?tls.Client,
 
@@ -26,9 +26,9 @@ pub const Stream = struct {
 			.allocator = null,
 			.tls_client = null,
 			.stream = stream,
-			.pfd = [1]os.pollfd{os.pollfd{
+			.pfd = [1]posix.pollfd{.{
 				.fd = stream.handle,
-				.events = os.POLL.IN,
+				.events = posix.POLL.IN,
 				.revents = undefined,
 			}},
 		};
@@ -57,7 +57,7 @@ pub const Stream = struct {
 	}
 
 	pub fn poll(self: *Stream, timeout: i32) !usize {
-		return os.poll(&self.pfd, timeout);
+		return posix.poll(&self.pfd, timeout);
 	}
 
 	pub fn read(self: *Stream, buf: []u8) !usize {
