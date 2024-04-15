@@ -26,7 +26,7 @@ And add this to you build.zig
         .target = target,
         .optimize = optimize,
     });
-    exe.addModule("smtp_client", string.module("smtp_client"));
+    exe.addModule("smtp_client", smtp_client.module("smtp_client"));
 
 ```
 
