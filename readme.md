@@ -19,14 +19,14 @@ Add this to your build.zig.zon
 
 ```
 
-And add this to you build.zig.zon
+And add this to you build.zig
 
 ```zig
     const smtp_client = b.dependency("smtp_client", .{
         .target = target,
         .optimize = optimize,
     });
-    exe.addModule("smtp_client", string.module("smtp_client"));
+    exe.addModule("smtp_client", smtp_client.module("smtp_client"));
 
 ```
 
@@ -52,7 +52,7 @@ pub fn main() !void {
   try smtp.send(.{
     .from = "admin@localhost",
     .to = &.{"user@localhost"},
-    .data = "From: Admin <admin@localhost>\r\nTo: User <user@localhost>\r\nSuject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
+    .data = "From: Admin <admin@localhost>\r\nTo: User <user@localhost>\r\nSubject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
   }, config);
 }
 ```
