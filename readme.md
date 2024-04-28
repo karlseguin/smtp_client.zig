@@ -27,7 +27,6 @@ And add this to you build.zig
         .optimize = optimize,
     });
     exe.addModule("smtp_client", smtp_client.module("smtp_client"));
-
 ```
 
 # Basic Usage
@@ -45,8 +44,8 @@ pub fn main() !void {
     .encryption = .none,
     .host = "localhost",
     .allocator = allocator,
-    // .username="username",
-    // .password="password",
+    // .username = "username",
+    // .password = "password",
   };
 
   try smtp.send(.{
@@ -64,7 +63,6 @@ Note that the `data` field above must conform to [RFC 2822 - Internet Message Fo
 
 I plan on adding some type of `builder` to help with generating a valid `data` payload.
 
-
 ## Encryption
 Prefer using `.encryption = .tls` where possible. Most modern email vendors provider SMTP over TLS and support TLS 1.3. 
 
@@ -75,6 +73,35 @@ Prefer using `.encryption = .tls` where possible. Most modern email vendors prov
 `.encryption = .insecure` will not use any encryption. In this mode, authentication via `LOGIN` or `PLAIN` will be allowed and passwords will be sent in plain text. 
 
 Regardless of the encryption setting, the library will favor authenticating via `CRAM-MD5` if the server supports it.
+
+# Client
+The `send` and `sendAll` functions are wrappers around an `smtp.Client`. Where `send` and `sendAll` open a connection, send one or more messages and then close the connection, an `smtp.Client` keeps the connection open until `deinit` is called. The client is **not** thread safe.
+
+```zig
+var client = try smtp.connect({
+  .port = 25,
+  .encryption = .none,
+  .host = "localhost",
+  .allocator = allocator,
+  // .username = "username",
+  // .password = "password",
+});
+defer client.deinit();
+
+try client.hello();
+try client.auth();
+
+
+// Multiple messages can be sent here
+try client.from("email1@example.com");
+try client.to(&.{"recipient@example.com"});
+try client.data("From: Admin <email1@example.com>\r\nTo: User <recipient@example.com>\r\nSuject: Test\r\n\r\nThis is a test email from Zig\r\n.\r\n");
+
+// One this is called, no more messages can be sent
+try client.quit();
+```
+
+`hello` and `auth` can be called upfront, while `from`, `to` and `data` can be called repeatedly (protected by a mutex if thread-safety is needed).
 
 ## Performance
 ### Tip 1 - sendAll
@@ -129,13 +156,15 @@ var config = smtp.Config{
 ### Tip 3 - Skip DNS Resolution
 Every call to `send` and `sendAll` requires a DNS lookup on `config.host`. The `sendTo` and `sendAllTo` functions, which take an `std.net.Address`, can be used instead. When using these functions, `config.host` must still be set to the valid host when `.tls` or `.start_tls` is used.
 
+Similarly, instead of `connect` to create a `Client`, `connectTo` can be used which takes an `std.net.Address`.
+
 ### Allocator
 `config.allocator` is required in two cases:
-1. `send` or `sendAll` are used, OR
+1. `send`, `sendAll` or `connect` are used, OR
 2. `config.ca_bundle` is not specified and `.tls` or `.start_tls` are used
 
 Put differently, `config.allocator` can be null when both these cases are true:
-1. `sendTo` or `sendAllTo` are used, AND
+1. `sendTo`, `sendAllTo` or `connectTo` are used, AND
 2. `config.ca_bundle` is provided or `.encryption` is set to `.none` or `.insecure`.
 
 Put differently again, `config.allocator` is only used by the library to (a) call `std.net.tcpConnectToHost` which does a DNS lookup and (b) manage the `std.crypto.Certificate.Bundle`.

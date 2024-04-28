@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const Bundle = std.crypto.Certificate.Bundle;
 
 pub const client = @import("client.zig");
-pub const Client = client.Client(*Stream);
+pub const Client = client.Client(Stream);
 pub const Stream = @import("stream.zig").Stream;
 
 pub const Encryption = enum {
@@ -17,12 +17,12 @@ pub const Encryption = enum {
 pub const Config = struct {
 	port: u16 = 25,
 	host: []const u8,
+	ca_bundle: ?Bundle = null,
 	timeout: i32 = 10_000,
 	encryption: Encryption = .tls,
 	username: ?[]const u8 = null,
 	password: ?[]const u8 = null,
 	local_name: []const u8 = "localhost",
-	ca_bundle: ?Bundle = null,
 	allocator: ?Allocator = null,
 };
 
@@ -32,45 +32,45 @@ pub const Message = struct {
 	data: []const u8,
 };
 
+pub fn connect(config: Config) !Client {
+	const allocator = config.allocator orelse return error.AllocatorRequired;
+	const stream = Stream.init(try std.net.tcpConnectToHost(allocator, config.host, config.port));
+	return Client.init(stream, config);
+}
+
+pub fn connectTo(address: std.net.Address, config: Config) !Client {
+	const stream = Stream.init(try std.net.tcpConnectToAddress(address));
+	return Client.init(stream, config);
+}
+
 pub fn send(message: Message, config: Config) !void {
-	var count: usize = 0;
-	return sendAll(&[_]Message{message}, config, &count);
+	var sent: usize = 0;
+	return sendAll(&[_]Message{message}, config, &sent);
 }
 
 pub fn sendAll(messages: []const Message, config: Config, sent: *usize) !void {
-	const allocator = config.allocator orelse return error.AllocatorRequired;
-	const net_stream = try std.net.tcpConnectToHost(allocator, config.host, config.port);
-	var stream = Stream.init(net_stream);
-	defer stream.deinit();
-	return sendAllT(*Stream, &stream, messages, config, sent);
+	var c = try connect(config);
+	defer c.deinit();
+	try oneShot(&c, messages, sent);
 }
 
 pub fn sendTo(address: std.net.Address, message: Message, config: Config) !void {
-	var count: usize = 0;
-	return sendAllTo(address, &[_]Message{message}, config, &count);
+	var sent: usize = 0;
+	return sendAllTo(address, &[_]Message{message}, config, &sent);
 }
 
 pub fn sendAllTo(address: std.net.Address, messages: []const Message, config: Config, sent: *usize) !void {
-	const net_stream = try std.net.tcpConnectToAddress(address);
-	var stream = Stream.init(net_stream);
-	defer stream.deinit();
-	return sendAllT(*Stream, &stream, messages, config, sent);
+	var c = try connectTo(address, config);
+	defer c.deinit();
+	try oneShot(&c, messages, sent);
 }
 
-// done this way do we can call sendT in test and inject a mock stream object
-fn sendAllT(comptime S: type, stream: S, messages: []const Message, config: Config, sent: *usize) !void {
-	const encryption = config.encryption;
-	if (encryption == .tls) {
-		try stream.toTLS(&config);
-	}
-
-	var c = try client.Client(S).init(stream, config);
+// client is anytype for testing. It's a client.Client(net.Stream) during normal
+// execution, but a client.Client(*t.MockServer) during tests.
+fn oneShot(c: anytype, messages: []const Message, sent: *usize) !void {
 	defer c.quit() catch {};
 
 	try c.hello();
-	if (encryption == .start_tls) {
-		try c.startTLS();
-	}
 	try c.auth();
 
 	for (messages) |message| {
@@ -88,7 +88,7 @@ test {
 }
 
 test "send: unencrypted single to" {
-	var ms = t.MockServer.init(&.{
+	const ms = t.MockServer.init(&.{
 		.{.req = "EHLO localhost\r\n", .res = "250\r\n"},
 		.{.req = "MAIL FROM:<from-user@localhost.local>\r\n", .res = "250\r\n"},
 		.{.req = "RCPT TO:<to-user@localhost.local>\r\n", .res = "250\r\n"},
@@ -97,20 +97,22 @@ test "send: unencrypted single to" {
 		.{.req = "QUIT\r\n", .res = null},
 	});
 
-	var count: usize = 0;
-	try sendAllT(*t.MockServer, &ms, &.{.{
+	var sent: usize = 0;
+	var c = client.Client(t.MockServer).init(ms, .{
+		.port = 0,
+		.host = "localhost",
+	});
+
+	try oneShot(&c, &.{.{
 		.from = "from-user@localhost.local",
 		.to = &.{"to-user@localhost.local"},
 		.data = "This is the data\r\n.\r\n",
-	}}, .{
-		.port = 0,
-		.host = "localhost",
-	}, &count);
-	try t.expectEqual(1, count);
+	}}, &sent);
+	try t.expectEqual(1, sent);
 }
 
 test "send: scram-md5 + multiple to" {
-	var ms = t.MockServer.init(&.{
+	const ms = t.MockServer.init(&.{
 		.{.req = "EHLO localhost\r\n", .res = "250-Ok\r\n250 AUTH Plain cram-MD5\r\n"},
 		.{.req = "AUTH CRAM-MD5\r\n", .res = "235 my secret\r\n"},
 		.{.req = "leto 9103a6f589ce8c5a3b775dd878b5ac3a\r\n", .res = "235 my secret\r\n"},
@@ -122,22 +124,24 @@ test "send: scram-md5 + multiple to" {
 		.{.req = "QUIT\r\n", .res = null},
 	});
 
-	var count: usize = 0;
-	try sendAllT(*t.MockServer, &ms, &.{.{
-		.from = "from-user@localhost.local",
-		.to = &.{"to-user1@localhost.local", "to-user2@localhost.local"},
-		.data =  "hi\r\n",
-	}}, .{
+	var sent: usize = 0;
+	var c = client.Client(t.MockServer).init(ms, .{
 		.port = 0,
 		.host = "localhost",
 		.username = "leto",
 		.password =  "ghanima",
-	}, &count);
-	try t.expectEqual(1, count);
+	});
+
+	try oneShot(&c, &.{.{
+		.from = "from-user@localhost.local",
+		.to = &.{"to-user1@localhost.local", "to-user2@localhost.local"},
+		.data =  "hi\r\n",
+	}}, &sent);
+	try t.expectEqual(1, sent);
 }
 
 test "sendAll: success" {
-	var ms = t.MockServer.init(&.{
+	const ms = t.MockServer.init(&.{
 		.{.req = "EHLO localhost\r\n", .res = "250 Ok\r\n"},
 		.{.req = "MAIL FROM:<from-user1@localhost.local>\r\n", .res = "250\r\n"},
 		.{.req = "RCPT TO:<to-user1@localhost.local>\r\n", .res = "250\r\n"},
@@ -151,7 +155,12 @@ test "sendAll: success" {
 	});
 
 	var sent: usize = 0;
-	try sendAllT(*t.MockServer, &ms, &.{
+	var c = client.Client(t.MockServer).init(ms, .{
+		.port = 0,
+		.host = "localhost",
+	});
+
+	try oneShot(&c, &.{
 		.{
 			.from = "from-user1@localhost.local",
 			.to = &.{"to-user1@localhost.local"},
@@ -162,16 +171,13 @@ test "sendAll: success" {
 			.to = &.{"to-user2@localhost.local"},
 			.data =  "hi2\r\n",
 		},
-	}, .{
-		.port = 0,
-		.host = "localhost",
 	}, &sent);
 
 	try t.expectEqual(2, sent);
 }
 
 test "sendAll: partial" {
-	var ms = t.MockServer.init(&.{
+	const ms = t.MockServer.init(&.{
 		.{.req = "EHLO localhost\r\n", .res = "250 Ok\r\n"},
 		.{.req = "MAIL FROM:<from-user1@localhost.local>\r\n", .res = "250\r\n"},
 		.{.req = "RCPT TO:<to-user1@localhost.local>\r\n", .res = "250\r\n"},
@@ -182,7 +188,11 @@ test "sendAll: partial" {
 	});
 
 	var sent: usize = 0;
-	const err = sendAllT(*t.MockServer, &ms, &.{
+	var c = client.Client(t.MockServer).init(ms, .{
+		.port = 0,
+		.host = "localhost",
+	});
+	const err = oneShot(&c, &.{
 		.{
 			.from = "from-user1@localhost.local",
 			.to = &.{"to-user1@localhost.local"},
@@ -193,9 +203,6 @@ test "sendAll: partial" {
 			.to = &.{"to-user2@localhost.local"},
 			.data =  "hi2\r\n",
 		},
-	}, .{
-		.port = 0,
-		.host = "localhost",
 	}, &sent);
 
 	try t.expectEqual(error.MailboxNotAvailable, err);

@@ -5,14 +5,14 @@ pub fn build(b: *std.Build) !void {
 	const optimize = b.standardOptimizeOption(.{});
 
 	const smtp_client = b.addModule("smtp_client", .{
-		.root_source_file = .{ .path = "src/smtp.zig" },
+		.root_source_file = b.path("src/smtp.zig"),
 	});
 
 	{
 		// example
 		const exe = b.addExecutable(.{
 			.name = "smtp_client_demo",
-			.root_source_file = .{ .path = "example/main.zig" },
+			.root_source_file = b.path("example/main.zig"),
 			.target = target,
 			.optimize = optimize,
 		});
@@ -32,9 +32,10 @@ pub fn build(b: *std.Build) !void {
 	{
 		// tests
 		const lib_test = b.addTest(.{
-			.root_source_file = .{ .path = "src/smtp.zig" },
+			.root_source_file = b.path("src/smtp.zig"),
 			.target = target,
 			.optimize = optimize,
+			.test_runner = b.path("test_runner.zig"),
 		});
 		const run_test = b.addRunArtifact(lib_test);
 		run_test.has_side_effects = true;

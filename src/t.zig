@@ -23,29 +23,29 @@ pub const Stream = struct {
 	closed: bool,
 	handle: c_int = 0,
 	_read_index: usize,
+	_arena: std.heap.ArenaAllocator,
 	_random: std.rand.DefaultPrng,
 	_to_read: std.ArrayList(u8),
-	_received: std.ArrayList(u8),
+	_received: std.ArrayList([]u8),
 
-	pub fn init() *Stream {
+	pub fn init() Stream {
 		var seed: u64 = undefined;
 		std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
 
-		const s = allocator.create(Stream) catch unreachable;
-		s.* = .{
+		return .{
 			.closed = false,
 			._read_index = 0,
+			._arena = std.heap.ArenaAllocator.init(allocator),
 			._random = std.rand.DefaultPrng.init(seed),
 			._to_read = std.ArrayList(u8).init(allocator),
-			._received = std.ArrayList(u8).init(allocator),
+			._received = std.ArrayList([]u8).init(allocator),
 		};
-		return s;
 	}
 
 	pub fn deinit(self: *Stream) void {
 		self._to_read.deinit();
 		self._received.deinit();
-		allocator.destroy(self);
+		self._arena.deinit();
 	}
 
 	pub fn reset(self: *Stream) void {
@@ -54,12 +54,16 @@ pub const Stream = struct {
 		self._received.clearRetainingCapacity();
 	}
 
-	pub fn received(self: *Stream) []const u8 {
+	pub fn received(self: *Stream) [][]const u8 {
 		return self._received.items;
 	}
 
-	pub fn poll(_: Stream, _: i32) !usize {
+	pub fn poll(_: *Stream, _: i32) !usize {
 		return 1;
+	}
+
+	pub fn toTLS(_: *Stream, _: *const lib.Config) !void {
+		// noop
 	}
 
 	pub fn add(self: *Stream, value: []const u8) void {
@@ -102,14 +106,14 @@ pub const Stream = struct {
 
 	// store messages that are written to the stream
 	pub fn writeAll(self: *Stream, data: []const u8) !void {
-		self._received.appendSlice(data) catch unreachable;
+		const d = self._arena.allocator().dupe(u8, data) catch unreachable;
+		self._received.append(d) catch unreachable;
 	}
 
 	pub fn close(self: *Stream) void {
 		self.closed = true;
 	}
 };
-
 
 pub const MockServer = struct {
 	index: ?usize,

@@ -14,7 +14,7 @@ pub fn Client(comptime S: type) type {
 	return struct {
 		stream: S,
 
-		reader: Reader(S),
+		reader: Reader(*S),
 
 		// maximum reply length is 512
 		buf: [512]u8 = undefined,
@@ -28,24 +28,36 @@ pub fn Client(comptime S: type) type {
 
 		const Self = @This();
 
-		pub fn init(stream: S, config: Config) !Self {
-			var client = Self{
+		pub fn init(stream: S, config: Config) Self {
+			return .{
 				.stream = stream,
 				.config = config,
-				.reader = Reader(S).init(stream, config.timeout),
+				.reader = undefined,
 			};
+		}
 
-			const code = (try client.reader.read()).code;
-			if (code != 220) {
-				return errorFromCode(code);
-			}
-			return client;
+		pub fn deinit(self: *Self) void {
+			self.stream.deinit();
 		}
 
 		pub fn hello(self: *Self) !void {
-			const buf = &self.buf;
+			const config = &self.config;
+			if (config.encryption == .tls) {
+				try self.stream.toTLS(config);
+			}
+
+			self.reader = Reader(*S).init(&self.stream, config.timeout);
 			var reader = &self.reader;
 
+			{
+				// server should send the first message
+				const code = (try reader.read()).code;
+				if (code != 220) {
+					return errorFromCode(code);
+				}
+			}
+
+			const buf = &self.buf;
 			const msg = try std.fmt.bufPrint(buf, "EHLO {s}\r\n", .{self.config.local_name});
 			try self.stream.writeAll(msg);
 
@@ -85,6 +97,10 @@ pub fn Client(comptime S: type) type {
 		}
 
 		pub fn auth(self: *Self) !void {
+			if (self.config.encryption == .start_tls) {
+				try self.startTLS();
+			}
+
 			if (self.config.username == null) {
 				return;
 			}
@@ -133,7 +149,7 @@ pub fn Client(comptime S: type) type {
 		pub fn to(self: *Self, recepients: []const []const u8) !void {
 			var buf = &self.buf;
 			var reader = &self.reader;
-			const stream = self.stream;
+			const stream = &self.stream;
 
 			@memcpy(buf[0..9], "RCPT TO:<");
 			for (recepients) |recepient| {
@@ -153,7 +169,7 @@ pub fn Client(comptime S: type) type {
 
 		pub fn data(self: *Self, d: []const u8) !void {
 			var reader = &self.reader;
-			const stream = self.stream;
+			const stream = &self.stream;
 
 			{
 				try stream.writeAll("DATA\r\n");
@@ -224,27 +240,32 @@ pub fn Client(comptime S: type) type {
 				buf[end-2] = '\r';
 				buf[end-1] = '\n';
 
-				try self.stream.writeAll(buf);
+				try self.stream.writeAll(buf[0..end]);
+			}
+
+			{
 				const reply = try reader.read();
 				const code = reply.code;
 				if (code != 334) {
 					return errorFromCode(code);
 				}
 
-				// base64 encoded "Password"
-				if (std.mem.eql(u8, reply.data, "TXktVXNlcm5hbWU=") == false) {
+				// base64 encoded "Password:"
+				if (std.mem.eql(u8, reply.data, "UGFzc3dvcmQ6") == false) {
 					return error.UnexpectedServerResponse;
 				}
+
+				const password = config.password orelse return error.PasswordRequired;
+				const encoded = encoder.encode(buf[0..], password);
+				const end = encoded.len + 2;
+				buf[end-2] = '\r';
+				buf[end-1] = '\n';
+				try self.stream.writeAll(buf[0..end]);
 			}
 
-			{
-				const password = encoder.encode(buf, config.password.?);
-				try self.stream.writeAll(password);
-
-				const code = (try reader.read()).code;
-				if (code != 334) {
-					return errorFromCode(code);
-				}
+			const code = (try reader.read()).code;
+			if (code != 235) {
+				return errorFromCode(code);
 			}
 		}
 
@@ -324,42 +345,37 @@ fn errorFromCode(code: u16) anyerror {
 }
 
 const t = @import("t.zig");
-test "client: init" {
-	const stream = t.Stream.init();
-	defer stream.deinit();
-
+test "client: helo" {
 	const config = testConfig(.{});
 
 	{
 		// wrong server init reply
+		var stream = t.Stream.init();
 		stream.add("421 go away\r\n");
-		try t.expectError(error.ServiceNotAvailable, TestClient.init(stream, config));
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
+		try t.expectError(error.ServiceNotAvailable, client.hello());
 	}
 
-	{
-		// ok
-		stream.add("220 Hi\r\n");
-		_ = try TestClient.init(stream, config);
-	}
-}
-
-test "client: hello" {
-	const stream = t.Stream.init();
-	defer stream.deinit();
-
-	const config = testConfig(.{});
 
 	{
 		// wrong server reply
+		var stream = t.Stream.init();
 		stream.add("220\r\n502 nope\r\n");
-		var client = try TestClient.init(stream, config);
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
 		try t.expectError(error.CommandNotImplemented, client.hello());
 	}
 
 	{
 		// no exstensions
+		var stream = t.Stream.init();
 		stream.add("220\r\n250\r\n");
-		var client = try TestClient.init(stream, config);
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
 		try client.hello();
 		try t.expectEqual(false, client.ext_smtp_utf8);
 		try t.expectEqual(false, client.ext_8_bit_mine);
@@ -368,8 +384,11 @@ test "client: hello" {
 
 	{
 		// SMTPUTF8
+		var stream = t.Stream.init();
 		stream.add("220\r\n250-\r\n250 SMTPUTF8\r\n");
-		var client = try TestClient.init(stream, config);
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
 		try client.hello();
 		try t.expectEqual(true, client.ext_smtp_utf8);
 		try t.expectEqual(false, client.ext_8_bit_mine);
@@ -378,8 +397,11 @@ test "client: hello" {
 
 	{
 		// 8BITMIME
+		var stream = t.Stream.init();
 		stream.add("220\r\n250-\r\n250 8BITMIME\r\n");
-		var client = try TestClient.init(stream, config);
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
 		try client.hello();
 		try t.expectEqual(false, client.ext_smtp_utf8);
 		try t.expectEqual(true, client.ext_8_bit_mine);
@@ -388,8 +410,11 @@ test "client: hello" {
 
 	{
 		// CRAM-MD5
+		var stream = t.Stream.init();
 		stream.add("220\r\n250-\r\n250 AUTH LOGIN PLAIN CRAM-MD5\r\n");
-		var client = try TestClient.init(stream, config);
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
 		try client.hello();
 		try t.expectEqual(false, client.ext_smtp_utf8);
 		try t.expectEqual(false, client.ext_8_bit_mine);
@@ -398,43 +423,75 @@ test "client: hello" {
 
 	{
 		// Login
+		var stream = t.Stream.init();
 		stream.add("220\r\n250-\r\n250 AUTH LOGIN PLAIN\r\n");
-		var client = try TestClient.init(stream, config);
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
 		try client.hello();
 		try t.expectEqual(.LOGIN, client.ext_auth);
 	}
 
 	{
 		// Plain
+		var stream = t.Stream.init();
 		stream.add("220\r\n250 Auth PlAIN\r\n");
-		var client = try TestClient.init(stream, config);
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
 		try client.hello();
 		try t.expectEqual(.PLAIN, client.ext_auth);
 	}
 }
 
 test "client: auth" {
-	const stream = t.Stream.init();
-	defer stream.deinit();
-
 	{
 		// cannot use PLAIN auth with unencrypted connection
+		var stream = t.Stream.init();
 		stream.add("220\r\n250 AUTH PLAIN\r\n");
-		var client = try TestClient.init(stream, testConfig(.{.encryption = .none, .username = "leto"}));
+		var client = TestClient.init(stream, testConfig(.{.encryption = .none, .username = "leto"}));
+		defer client.deinit();
+
 		try client.hello();
 		try t.expectError(error.InsecureAuth, client.auth());
 	}
 
 	{
 		// cannot use LOGIN auth with unencrypted connection
+		var stream = t.Stream.init();
 		stream.add("220\r\n250 AUTH LOGIN\r\n");
-		var client = try TestClient.init(stream, testConfig(.{.encryption = .none, .username = "leto"}));
+		var client = TestClient.init(stream, testConfig(.{.encryption = .none, .username = "leto"}));
+		defer client.deinit();
+
 		try client.hello();
 		try t.expectError(error.InsecureAuth, client.auth());
 	}
+
+	{
+		// cannot use LOGIN auth with unencrypted connection
+		var stream = t.Stream.init();
+		stream.add("220\r\n250 AUTH LOGIN\r\n");
+		stream.add("334 UGFzc3dvcmQ6\r\n");
+		stream.add("235 Auth Successful\r\n");
+		var client = TestClient.init(stream, testConfig(.{.username = "leto", .password = "ghanima", .encryption = .tls}));
+		defer client.deinit();
+
+		try client.hello();
+		try client.auth();
+		try client.quit();
+
+		const received = client.stream.received();
+		try t.expectEqual(4, received.len);
+		try t.expectString("EHLO localhost\r\n", received[0]);
+		try t.expectString("AUTH LOGIN bGV0bw==\r\n", received[1]);
+		try t.expectString("Z2hhbmltYQ==\r\n", received[2]);
+		try t.expectString("QUIT\r\n", received[3]);
+	}
 }
 
-const TestClient = Client(*t.Stream);
+
+
+const TestClient = Client(t.Stream);
 fn testConfig(config: anytype) Config {
 	const T = @TypeOf(config);
 	return .{
