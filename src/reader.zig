@@ -21,7 +21,13 @@ pub fn Reader(comptime S: type) type {
 
 		const Self = @This();
 
-		pub fn init(stream: S, timeout: i32) Self {
+		pub fn init(stream: S, timeout: i32) !Self {
+			const timeval = &std.mem.toBytes(std.posix.timeval{
+				.tv_sec = @intCast(@divTrunc(timeout, 1000)),
+				.tv_usec = @intCast(@mod(timeout, 1000) * 1000),
+			});
+			try stream.readTimeout(timeval);
+
 			return .{
 				.stream = stream,
 				.timeout = timeout,
@@ -56,11 +62,11 @@ pub fn Reader(comptime S: type) type {
 					self.start = 0;
 				}
 
-				if ((try stream.poll(timeout)) == 0) {
-					return error.Timeout;
-				}
+				const n = stream.read(buf[pos..]) catch |err| switch (err) {
+					error.WouldBlock => return error.Timeout,
+					else => return err,
+				};
 
-				const n = try stream.read(buf[pos..]);
 				if (n == 0) {
 					return error.Closed;
 				}
@@ -125,7 +131,7 @@ const t = lib.testing;
 test "reader: buffered" {
 	{
 		// empty
-		var reader = Reader(*t.Stream).init(undefined, 0);
+		var reader = try Reader(*t.Stream).init(undefined, 0);
 		try t.expectEqual(null, reader.buffered());
 		try t.expectEqual(0, reader.pos);
 		try t.expectEqual(0, reader.start);
@@ -133,7 +139,7 @@ test "reader: buffered" {
 
 	{
 		// small data, no message
-		var reader = Reader(*t.Stream).init(undefined, 0);
+		var reader = try Reader(*t.Stream).init(undefined, 0);
 		reader.buf[0] = 'a';
 		reader.pos = 1;
 		try t.expectEqual(null, reader.buffered());
@@ -141,7 +147,7 @@ test "reader: buffered" {
 
 	{
 		// more data, still no message
-		var reader = Reader(*t.Stream).init(undefined, 0);
+		var reader = try Reader(*t.Stream).init(undefined, 0);
 		@memcpy(reader.buf[0..11], "200 abc123!");
 		reader.pos = 11;
 		try t.expectEqual(null, reader.buffered());
@@ -149,7 +155,7 @@ test "reader: buffered" {
 
 	{
 		// single message at 0 start
-		var reader = Reader(*t.Stream).init(undefined, 0);
+		var reader = try Reader(*t.Stream).init(undefined, 0);
 		@memcpy(reader.buf[0..5], "253\r\n");
 		reader.pos = 5;
 		try expectReply(try reader.read(), 253, false, "");
@@ -161,7 +167,7 @@ test "reader: buffered" {
 
 	{
 		// message at 0 start with data
-		var reader = Reader(*t.Stream).init(undefined, 0);
+		var reader = try Reader(*t.Stream).init(undefined, 0);
 		@memcpy(reader.buf[0..15], "500 Go Away\r\n20");
 		reader.pos = 15;
 		try expectReply(try reader.read(), 500, false, "Go Away");
@@ -171,7 +177,7 @@ test "reader: buffered" {
 
 	{
 		// incomplete multiline messages
-		var reader = Reader(*t.Stream).init(undefined, 0);
+		var reader = try Reader(*t.Stream).init(undefined, 0);
 		@memcpy(reader.buf[0..21], "100-\r\n100-Hello\r\n100\r");
 		reader.pos = 21;
 		try expectReply(try reader.read(), 100, true, "");
@@ -183,7 +189,7 @@ test "reader: buffered" {
 
 	{
 		// complete multiline messsage
-		var reader = Reader(*t.Stream).init(undefined, 0);
+		var reader = try Reader(*t.Stream).init(undefined, 0);
 		@memcpy(reader.buf[0..22], "101-\r\n101-He1lo\r\n101\r\n");
 		reader.pos = 22;
 		try expectReply(try reader.read(), 101, true, "");
@@ -210,7 +216,7 @@ test "reader: read fuzz" {
 		stream.add("301-even more data\r\n");
 		stream.add("301\r\n");
 
-		var reader = Reader(*t.Stream).init(&stream, 10);
+		var reader = try Reader(*t.Stream).init(&stream, 10);
 		try expectReply(try reader.read(), 100, false, "");
 		try expectReply(try reader.read(), 101, false, "a");
 		try expectReply(try reader.read(), 200, false, "this is a bit longer");
@@ -228,7 +234,7 @@ test "reader: closed" {
 	defer stream.deinit();
 	stream.add("100\r\n200-hello\r");
 
-	var reader = Reader(*t.Stream).init(&stream, 10);
+	var reader = try Reader(*t.Stream).init(&stream, 10);
 	try expectReply(try reader.read(), 100, false, "");
 	try t.expectError(error.Closed, reader.read());
 }

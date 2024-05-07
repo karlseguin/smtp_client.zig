@@ -46,7 +46,7 @@ pub fn Client(comptime S: type) type {
 				try self.stream.toTLS(config);
 			}
 
-			self.reader = Reader(*S).init(&self.stream, config.timeout);
+			self.reader = try Reader(*S).init(&self.stream, config.timeout);
 			var reader = &self.reader;
 
 			{

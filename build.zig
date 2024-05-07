@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) !void {
 			.target = target,
 			.optimize = optimize,
 		});
+		exe.linkLibC();
 		exe.root_module.addImport("smtp_client", smtp_client);
 		b.installArtifact(exe);
 

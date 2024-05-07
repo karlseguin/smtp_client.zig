@@ -16,7 +16,6 @@ pub const Stream = struct {
 	// not null if we own this and have to manage/release it
 	ca_bundle: ?Bundle,
 
-	pfd: [1]posix.pollfd,
 	stream: net.Stream,
 	tls_client: ?tls.Client,
 
@@ -26,11 +25,6 @@ pub const Stream = struct {
 			.allocator = null,
 			.tls_client = null,
 			.stream = stream,
-			.pfd = [1]posix.pollfd{.{
-				.fd = stream.handle,
-				.events = posix.POLL.IN,
-				.revents = undefined,
-			}},
 		};
 	}
 
@@ -56,8 +50,8 @@ pub const Stream = struct {
 		self.tls_client = try tls.Client.init(self.stream, bundle, config.host);
 	}
 
-	pub fn poll(self: *Stream, timeout: i32) !usize {
-		return posix.poll(&self.pfd, timeout);
+	pub fn readTimeout(self: *Stream, timeval: []const u8) !void {
+		try posix.setsockopt(self.stream.handle, posix.SOL.SOCKET, posix.SO.RCVTIMEO, timeval);
 	}
 
 	pub fn read(self: *Stream, buf: []u8) !usize {

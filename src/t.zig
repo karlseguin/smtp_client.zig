@@ -58,8 +58,8 @@ pub const Stream = struct {
 		return self._received.items;
 	}
 
-	pub fn poll(_: *Stream, _: i32) !usize {
-		return 1;
+	pub fn readTimeout(_: *Stream, _: []const u8) !void {
+		// noop
 	}
 
 	pub fn toTLS(_: *Stream, _: *const lib.Config) !void {
@@ -130,8 +130,8 @@ pub const MockServer = struct {
 		// noop
 	}
 
-	pub fn poll(_: MockServer, _: i32) !usize {
-		return 1;
+	pub fn readTimeout(_: *MockServer, _: []const u8) !void {
+		// noop
 	}
 
 	pub fn read(self: *MockServer, buf: []u8) !usize {
