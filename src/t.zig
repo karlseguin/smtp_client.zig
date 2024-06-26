@@ -24,7 +24,7 @@ pub const Stream = struct {
 	handle: c_int = 0,
 	_read_index: usize,
 	_arena: std.heap.ArenaAllocator,
-	_random: std.rand.DefaultPrng,
+	_random: std.Random.DefaultPrng,
 	_to_read: std.ArrayList(u8),
 	_received: std.ArrayList([]u8),
 
@@ -36,7 +36,7 @@ pub const Stream = struct {
 			.closed = false,
 			._read_index = 0,
 			._arena = std.heap.ArenaAllocator.init(allocator),
-			._random = std.rand.DefaultPrng.init(seed),
+			._random = std.Random.DefaultPrng.init(seed),
 			._to_read = std.ArrayList(u8).init(allocator),
 			._received = std.ArrayList([]u8).init(allocator),
 		};
