@@ -89,7 +89,7 @@ pub fn Reader(comptime S: type) type {
 			const start = self.start;
 			if (pos == start) return null;
 
-			const buf = self.buf;
+			const buf = &self.buf;
 			if (std.mem.indexOfScalar(u8, buf[start..pos], '\n')) |index| {
 				const message_end = start + index;
 				const new_start = message_end + 1;
