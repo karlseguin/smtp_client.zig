@@ -19,10 +19,10 @@ jobs:
         run: tar -xf zig-linux-x86_64-0.13.0.tar.xz
 
       - name: Alias
-        run: alias zig=$PWD/zig-linux-x86_64-0.13.0.tar.xz/zig
+        run: alias zig=$PWD/zig-linux-x86_64-0.13.0/zig
 
       - name: Version
-        run: $PWD/zig-linux-x86_64-0.13.0.tar.xz/zig version
+        run: $PWD/zig-linux-x86_64-0.13.0/zig version
 
       - name: Test
-        run: $PWD/zig-linux-x86_64-0.13.0.tar.xz/zig build test
+        run: $PWD/zig-linux-x86_64-0.13.0/zig build test
