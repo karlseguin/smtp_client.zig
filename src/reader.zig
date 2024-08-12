@@ -118,11 +118,16 @@ pub const Reply = struct {
 
 	// our caller made sure that data.len >= 3
 	fn parse(raw: []const u8) Reply {
+		const firstByte = if (raw[0] >= '0' and raw[0] <= '9') ((@as(u16, raw[0]) - '0') * 100) else 500;
+		const secondByte = if (raw[2] >= '0' and raw[2] <= '9') ((@as(u16, raw[1]) - '0') * 10) else 0;
+		const thirdByte = if (raw[2] >= '0' and raw[2] <= '9') (raw[2] - '0') else 0;
+		const code = firstByte + secondByte + thirdByte;
+
 		return .{
 			.raw = raw,
 			.more = raw.len > 3 and raw[3] == '-',
 			.data = if (raw.len > 4) raw[4..] else "",
-			.code = ((@as(u16, raw[0]) - '0') * 100) + ((@as(u16, raw[1]) - '0') * 10) + (raw[2] - '0'),
+			.code = code,
 		};
 	}
 };

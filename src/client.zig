@@ -442,6 +442,16 @@ test "client: helo" {
 		try client.hello();
 		try t.expectEqual(.PLAIN, client.ext_auth);
 	}
+
+	{
+		// wrong command
+		var stream = t.Stream.init();
+		stream.add("invalid data\r\n");
+		var client = TestClient.init(stream, config);
+		defer client.deinit();
+
+		try t.expectError(error.SyntaxErrorOrCommandNotFound, client.hello());
+	}
 }
 
 test "client: auth" {
@@ -488,8 +498,6 @@ test "client: auth" {
 		try t.expectString("QUIT\r\n", received[3]);
 	}
 }
-
-
 
 const TestClient = Client(t.Stream);
 fn testConfig(config: anytype) Config {
