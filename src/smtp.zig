@@ -1,7 +1,7 @@
 const std = @import("std");
+const Bundle = @import( "crypto/Bundle.zig" );
 
 const Allocator = std.mem.Allocator;
-const Bundle = std.crypto.Certificate.Bundle;
 
 pub const client = @import("client.zig");
 pub const Client = client.Client(Stream);

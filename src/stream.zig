@@ -3,11 +3,13 @@ const lib = @import("lib.zig");
 
 const net = std.net;
 const posix = std.posix;
-const tls = std.crypto.tls;
+const tls = struct {
+  const Client = @import( "tlsclient.zig" );
+};
 
 const Config = lib.Config;
 const Allocator = std.mem.Allocator;
-const Bundle = std.crypto.Certificate.Bundle;
+const Bundle = @import( "crypto/Bundle.zig" );
 
 pub const Stream = struct {
     // not null if we own ca_bundle
@@ -30,7 +32,7 @@ pub const Stream = struct {
 
     pub fn deinit(self: *Stream) void {
         if (self.tls_client) |*tls_client| {
-            _ = tls_client.writeEnd(self.stream, "", true) catch {};
+            _ = tls_client.writeEnd(self.stream, "", true, .alert) catch {};
         }
         if (self.ca_bundle) |*ca_bundle| {
             ca_bundle.deinit(self.allocator.?);
