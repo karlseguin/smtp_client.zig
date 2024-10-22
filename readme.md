@@ -1,8 +1,6 @@
 # SMTP Client for Zig
 
-Zig only supports TLS 1.3. Furthermore, the TLS implementation [has known issues](https://github.com/ziglang/zig/issues/14172).
-
-This library does not work with Amazon SES as Amazon SES does not support TLS 1.3 (Amazon's documentation says that TLS 1.3 is supported with StartTLS but this does not appear to be the case (OpenSSL also reports an error)). 
+TLSv1.2 support code from https://github.com/melonedo/zig-tls12
 
 The library supports the `PLAIN`, `LOGIN` and `CRAM-MD5` mechanisms of the `AUTH` extension.
 
