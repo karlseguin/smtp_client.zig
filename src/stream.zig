@@ -47,7 +47,10 @@ pub const Stream = struct {
             self.allocator = allocator;
             break :blk b;
         };
-        self.tls_client = try tls.Client.init(self.stream, bundle, config.host);
+        self.tls_client = try tls.Client.init(
+            self.stream,
+            .{ .ca = .{ .bundle = bundle }, .host = .{ .explicit = config.host } },
+        );
     }
 
     pub fn readTimeout(self: *Stream, timeval: []const u8) !void {
