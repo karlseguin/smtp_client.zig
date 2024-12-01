@@ -22,10 +22,17 @@ pub fn Reader(comptime S: type) type {
         const Self = @This();
 
         pub fn init(stream: S, timeout: i32) !Self {
-            const timeval = &std.mem.toBytes(std.posix.timeval{
-                .tv_sec = @intCast(@divTrunc(timeout, 1000)),
-                .tv_usec = @intCast(@mod(timeout, 1000) * 1000),
-            });
+             const timeval = if (std.target.os == .macos) {
+                &std.mem.toBytes(std.posix.timeval{
+                    .tv_sec = @intCast(@divTrunc(timeout, 1000)),
+                    .tv_usec = @intCast(@mod(timeout, 1000) * 1000),
+                });
+            } else{
+                &std.mem.toBytes(std.posix.timeval{
+                    .sec = @intCast(@divTrunc(timeout, 1000)),
+                    .usec = @intCast(@mod(timeout, 1000) * 1000),
+                });
+            };
             try stream.readTimeout(timeval);
 
             return .{
