@@ -1,6 +1,6 @@
 const std = @import("std");
 const lib = @import("lib.zig");
-const builtin = @import("builtin");
+const native_os = @import("builtin").os.tag;
 
 const os = std.os;
 
@@ -23,16 +23,15 @@ pub fn Reader(comptime S: type) type {
         const Self = @This();
 
         pub fn init(stream: S, timeout: i32) !Self {
-            const timeval = if (builtin.target.os.tag == .macos) {
-                &std.mem.toBytes(std.posix.timeval{
+            const timeval = switch (native_os) {
+                .macos => &std.mem.toBytes(std.posix.timeval{
                     .tv_sec = @intCast(@divTrunc(timeout, 1000)),
                     .tv_usec = @intCast(@mod(timeout, 1000) * 1000),
-                });
-            } else{
-                &std.mem.toBytes(std.posix.timeval{
+                }),
+                else => &std.mem.toBytes(std.posix.timeval{
                     .sec = @intCast(@divTrunc(timeout, 1000)),
                     .usec = @intCast(@mod(timeout, 1000) * 1000),
-                });
+                }),
             };
             try stream.readTimeout(timeval);
 
