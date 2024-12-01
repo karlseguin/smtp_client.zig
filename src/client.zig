@@ -486,6 +486,16 @@ test "client: auth" {
         try t.expectString("Z2hhbmltYQ==\r\n", received[2]);
         try t.expectString("QUIT\r\n", received[3]);
     }
+
+    {
+        // wrong command
+        var stream = t.Stream.init();
+        stream.add("invalid data\r\n");
+        var client = TestClient.init(stream, testConfig(.{}));
+        defer client.deinit();
+
+        try t.expectError(error.SyntaxErrorOrCommandNotFound, client.hello());
+    }
 }
 
 const TestClient = Client(t.Stream);
