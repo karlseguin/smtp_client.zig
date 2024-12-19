@@ -54,7 +54,7 @@ pub const Stream = struct {
         self._received.clearRetainingCapacity();
     }
 
-    pub fn received(self: *Stream) [][]const u8 {
+    pub fn received(self: *Stream) [][]u8 {
         return self._received.items;
     }
 
