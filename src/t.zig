@@ -26,7 +26,7 @@ pub const Stream = struct {
     _arena: std.heap.ArenaAllocator,
     _random: std.Random.DefaultPrng,
     _to_read: std.ArrayList(u8),
-    _received: std.ArrayList([]u8),
+    _received: std.ArrayList([]const u8),
 
     pub fn init() Stream {
         var seed: u64 = undefined;
@@ -38,7 +38,7 @@ pub const Stream = struct {
             ._arena = std.heap.ArenaAllocator.init(allocator),
             ._random = std.Random.DefaultPrng.init(seed),
             ._to_read = std.ArrayList(u8).init(allocator),
-            ._received = std.ArrayList([]u8).init(allocator),
+            ._received = std.ArrayList([]const u8).init(allocator),
         };
     }
 
