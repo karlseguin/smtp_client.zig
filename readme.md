@@ -64,7 +64,7 @@ Note that the `data` field above must conform to [RFC 2822 - Internet Message Fo
 I plan on adding some type of `builder` to help with generating a valid `data` payload.
 
 ## Encryption
-Prefer using `.encryption = .tls` where possible. Most modern email vendors provider SMTP over TLS and support TLS 1.3. 
+Prefer using `.encryption = .tls` where possible. Most modern email vendors provide SMTP over TLS and support TLS 1.3. 
 
 `.encryption = .start_tls` is also supported, but StartTLS is vulnerable to man-in-the-middle attack.
 
@@ -90,7 +90,6 @@ defer client.deinit();
 
 try client.hello();
 try client.auth();
-
 
 // Multiple messages can be sent here
 try client.from("email1@example.com");

@@ -1,5 +1,4 @@
 const std = @import("std");
-const lib = @import("lib.zig");
 
 const os = std.os;
 
@@ -132,7 +131,7 @@ pub const Reply = struct {
     }
 };
 
-const t = lib.testing;
+const t = @import("t.zig");
 test "reader: buffered" {
     {
         // empty

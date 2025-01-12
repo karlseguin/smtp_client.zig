@@ -1,8 +1,8 @@
 const std = @import("std");
 
-const lib = @import("lib.zig");
-const Config = lib.Config;
-const Reader = lib.Reader;
+const Config = @import("smtp.zig").Config;
+const Reader = @import("reader.zig").Reader;
+const Message = @import("message.zig").Message;
 
 pub const AuthMode = enum {
     PLAIN,
@@ -113,13 +113,14 @@ pub fn Client(comptime S: type) type {
             }
         }
 
-        pub fn from(self: *Self, frm: []const u8) !void {
+        pub fn from(self: *Self, frm: Message.Address) !void {
             var buf = &self.buf;
+            const address = frm.address;
 
             @memcpy(buf[0..11], "MAIL FROM:<");
             var pos: usize = 11;
-            var end = pos + frm.len;
-            @memcpy(buf[pos..end], frm);
+            var end = pos + address.len;
+            @memcpy(buf[pos..end], address);
 
             buf[end] = '>';
             pos = end + 1;
@@ -146,15 +147,16 @@ pub fn Client(comptime S: type) type {
             }
         }
 
-        pub fn to(self: *Self, recepients: []const []const u8) !void {
+        pub fn to(self: *Self, recepients: []const Message.Address) !void {
             var buf = &self.buf;
             var reader = &self.reader;
             const stream = &self.stream;
 
             @memcpy(buf[0..9], "RCPT TO:<");
             for (recepients) |recepient| {
-                const recepient_end = 9 + recepient.len;
-                @memcpy(buf[9..recepient_end], recepient);
+                const address = recepient.address;
+                const recepient_end = 9 + address.len;
+                @memcpy(buf[9..recepient_end], address);
 
                 const end = recepient_end + 3;
                 @memcpy(buf[recepient_end..end], ">\r\n");
@@ -168,28 +170,51 @@ pub fn Client(comptime S: type) type {
         }
 
         pub fn data(self: *Self, d: []const u8) !void {
-            var reader = &self.reader;
-            const stream = &self.stream;
+            try self.prepareFordata();
+            try self.stream.writeAll(d);
+            try self.verifyData();
+        }
 
-            {
-                try stream.writeAll("DATA\r\n");
-                const code = (try self.reader.read()).code;
-                if (code != 354) {
-                    return errorFromCode(code);
-                }
+        pub fn sendMessage(self: *Self, message: Message) !void {
+            try self.from(message.from);
+            try self.to(message.to);
+
+            if (message.data) |d| {
+                return self.data(d);
             }
 
-            {
-                try stream.writeAll(d);
-                const code = (try reader.read()).code;
-                if (code != 250) {
-                    return errorFromCode(code);
-                }
-            }
+            try self.prepareFordata();
+
+
+            // boundary = "====#{String.replace(A.UUID.hex(), "-", "")}=="
+            // content_type = "\r\nContent-Type: multipart/alternative; boundary=\"#{boundary}\"\r\nMime-Version: 1.0"
+            // text_header = "\r\n\r\n--#{boundary}\r\nContent-Transfer-Encoding: quoted-printable\r\nContent-Type: text/plain; charset=UTF-8\r\nMime-Version: 1.0\r\n\r\n"
+            // html_header = "\r\n\r\n--#{boundary}\r\nContent-Transfer-Encoding: quoted-printable\r\nContent-Type: text/html; charset=UTF-8\r\nMime-Version: 1.0\r\n\r\n"
+
+            // body = :erlang.iolist_to_binary([
+            //     email.from_header, "\r\nTo: ", to, "\r\nSubject: ", prepared.subject, config[:content_type],
+            //     config[:text_header], text_body, config[:html_header], html_body, config[:boundry_end]
+            // ])
+
         }
 
         pub fn quit(self: *Self) !void {
             try self.stream.writeAll("QUIT\r\n");
+        }
+
+        fn prepareFordata(self: *Self) !void {
+            try self.stream.writeAll("DATA\r\n");
+            const code = (try self.reader.read()).code;
+            if (code != 354) {
+                return errorFromCode(code);
+            }
+        }
+
+        fn verifyData(self: *Self) !void {
+            const code = (try self.reader.read()).code;
+            if (code != 250) {
+                return errorFromCode(code);
+            }
         }
 
         fn authPlain(self: *Self) !void {

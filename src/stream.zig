@@ -1,11 +1,10 @@
 const std = @import("std");
-const lib = @import("lib.zig");
 
 const net = std.net;
 const posix = std.posix;
 const tls = std.crypto.tls;
 
-const Config = lib.Config;
+const Config = @import("smtp.zig").Config;
 const Allocator = std.mem.Allocator;
 const Bundle = std.crypto.Certificate.Bundle;
 

@@ -1,10 +1,10 @@
 // Internal helpers used by this library
 // If you're looking for helpers to help you mock/test
 const std = @import("std");
-const lib = @import("lib.zig");
 
 const mem = std.mem;
 const ArrayList = std.ArrayList;
+const Config = @import("smtp.zig").Config;
 
 pub const allocator = std.testing.allocator;
 
@@ -62,7 +62,7 @@ pub const Stream = struct {
         // noop
     }
 
-    pub fn toTLS(_: *Stream, _: *const lib.Config) !void {
+    pub fn toTLS(_: *Stream, _: *const Config) !void {
         // noop
     }
 
@@ -126,7 +126,7 @@ pub const MockServer = struct {
         };
     }
 
-    pub fn toTLS(_: *MockServer, _: *const lib.Config) !void {
+    pub fn toTLS(_: *MockServer, _: *const Config) !void {
         // noop
     }
 
@@ -165,3 +165,27 @@ pub const MockServer = struct {
         res: ?[]const u8,
     };
 };
+
+pub fn random() std.Random {
+    return .{
+        .ptr = @constCast(@ptrCast(&{})),
+        .fillFn = struct {
+            pub fn fill(_: *anyopaque, buf: []u8) void {
+                @memset(buf, 0);
+            }
+        }.fill,
+    };
+}
+
+// pub fn random() std.Random {
+//     var tr = TestRandom{};
+//     // hack, safe to take address of (to satisfy std.Random.init), because
+//     // we kow we'll never use it.
+//     return std.Random.init(&tr, TestRandom.fill);
+// }
+
+// const TestRandom = struct {
+//     pub fn fill(_: *const TestRandom, buf: []u8) void {
+//         @memset(buf, 0);
+//     }
+// };

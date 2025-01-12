@@ -1,11 +1,13 @@
 const std = @import("std");
 
+const Address = std.net.Address;
 const Allocator = std.mem.Allocator;
 const Bundle = std.crypto.Certificate.Bundle;
 
 pub const client = @import("client.zig");
 pub const Client = client.Client(Stream);
 pub const Stream = @import("stream.zig").Stream;
+pub const Message = @import("message.zig").Message;
 
 pub const Encryption = enum {
     insecure,
@@ -24,12 +26,7 @@ pub const Config = struct {
     password: ?[]const u8 = null,
     local_name: []const u8 = "localhost",
     allocator: ?Allocator = null,
-};
-
-pub const Message = struct {
-    to: []const []const u8,
-    from: []const u8,
-    data: []const u8,
+    message_id_host: ?[]const u8 = null,
 };
 
 pub fn connect(config: Config) !Client {
@@ -38,7 +35,7 @@ pub fn connect(config: Config) !Client {
     return Client.init(stream, config);
 }
 
-pub fn connectTo(address: std.net.Address, config: Config) !Client {
+pub fn connectTo(address: Address, config: Config) !Client {
     const stream = Stream.init(try std.net.tcpConnectToAddress(address));
     return Client.init(stream, config);
 }
@@ -54,12 +51,12 @@ pub fn sendAll(messages: []const Message, config: Config, sent: *usize) !void {
     try oneShot(&c, messages, sent);
 }
 
-pub fn sendTo(address: std.net.Address, message: Message, config: Config) !void {
+pub fn sendTo(address: Address, message: Message, config: Config) !void {
     var sent: usize = 0;
     return sendAllTo(address, &[_]Message{message}, config, &sent);
 }
 
-pub fn sendAllTo(address: std.net.Address, messages: []const Message, config: Config, sent: *usize) !void {
+pub fn sendAllTo(address: Address, messages: []const Message, config: Config, sent: *usize) !void {
     var c = try connectTo(address, config);
     defer c.deinit();
     try oneShot(&c, messages, sent);
@@ -74,9 +71,7 @@ fn oneShot(c: anytype, messages: []const Message, sent: *usize) !void {
     try c.auth();
 
     for (messages) |message| {
-        try c.from(message.from);
-        try c.to(message.to);
-        try c.data(message.data);
+        try c.sendMessage(message);
         sent.* += 1;
     }
 }
@@ -104,8 +99,8 @@ test "send: unencrypted single to" {
     });
 
     try oneShot(&c, &.{.{
-        .from = "from-user@localhost.local",
-        .to = &.{"to-user@localhost.local"},
+        .from = .{.address = "from-user@localhost.local"},
+        .to = &.{.{.address = "to-user@localhost.local"}},
         .data = "This is the data\r\n.\r\n",
     }}, &sent);
     try t.expectEqual(1, sent);
@@ -133,8 +128,8 @@ test "send: scram-md5 + multiple to" {
     });
 
     try oneShot(&c, &.{.{
-        .from = "from-user@localhost.local",
-        .to = &.{ "to-user1@localhost.local", "to-user2@localhost.local" },
+        .from = .{.address = "from-user@localhost.local"},
+        .to = &.{ .{.address = "to-user1@localhost.local" }, .{.address = "to-user2@localhost.local"}},
         .data = "hi\r\n",
     }}, &sent);
     try t.expectEqual(1, sent);
@@ -162,13 +157,13 @@ test "sendAll: success" {
 
     try oneShot(&c, &.{
         .{
-            .from = "from-user1@localhost.local",
-            .to = &.{"to-user1@localhost.local"},
+            .from = .{.address = "from-user1@localhost.local"},
+            .to = &.{.{.address = "to-user1@localhost.local"}},
             .data = "hi1\r\n",
         },
         .{
-            .from = "from-user2@localhost.local",
-            .to = &.{"to-user2@localhost.local"},
+            .from = .{.address = "from-user2@localhost.local"},
+            .to = &.{.{.address = "to-user2@localhost.local"}},
             .data = "hi2\r\n",
         },
     }, &sent);
@@ -194,13 +189,13 @@ test "sendAll: partial" {
     });
     const err = oneShot(&c, &.{
         .{
-            .from = "from-user1@localhost.local",
-            .to = &.{"to-user1@localhost.local"},
+            .from = .{.address = "from-user1@localhost.local"},
+            .to = &.{.{.address = "to-user1@localhost.local"}},
             .data = "hi1\r\n",
         },
         .{
-            .from = "from-user2@localhost.local",
-            .to = &.{"to-user2@localhost.local"},
+            .from = .{.address = "from-user2@localhost.local"},
+            .to = &.{.{.address = "to-user2@localhost.local"}},
             .data = "hi2\r\n",
         },
     }, &sent);
