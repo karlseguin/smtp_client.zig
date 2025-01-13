@@ -182,7 +182,9 @@ pub fn Client(comptime S: type) type {
 
         pub fn sendMessage(self: *Self, message: Message) !void {
             try self.from(message.from);
-            try self.to(message.to);
+            if (message.to) |message_to| {
+                try self.to(message_to);
+            }
 
             if (message.data) |d| {
                 return self.data(d);

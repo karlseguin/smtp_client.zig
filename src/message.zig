@@ -3,7 +3,9 @@ const date = @import("date.zig");
 
 pub const Message = struct {
     from: Address,
-    to: []const Address,
+    to: ?[]const Address = null,
+    cc: ?[]const Address = null,
+    bcc: ?[]const Address = null,
     subject: ?[]const u8 = null,
     text_body: ?[]const u8 = null,
     html_body: ?[]const u8 = null,
@@ -22,17 +24,9 @@ pub const Message = struct {
             try writer.writeAll("\r\n");
         }
 
-        if (self.to.len > 0) {
-            try writer.writeAll("To:");
-            var line_length: usize = 3;
-            try self.to[0].write(writer, &line_length);
-            for (self.to[1..]) |to| {
-                line_length += 1;
-                try writer.writeByte(',');
-                try to.write(writer, &line_length);
-            }
-            try writer.writeAll("\r\n");
-        }
+        try writeAddressList(writer, "To:", self.to);
+        try writeAddressList(writer, "Cc:", self.cc);
+        try writeAddressList(writer, "Bcc:", self.bcc);
 
         if (self.subject) |subject| {
             try writer.writeAll("Subject:");
@@ -109,6 +103,23 @@ pub const Message = struct {
         }
     };
 };
+
+fn writeAddressList(writer: anytype, comptime field_name: []const u8, address_list: ?[]const Message.Address) !void {
+    const list = address_list orelse return;
+    if (list.len == 0) {
+        return;
+    }
+
+    try writer.writeAll(field_name);
+    var line_length: usize = field_name.len;
+    try list[0].write(writer, &line_length);
+    for (list[1..]) |to| {
+        line_length += 1;
+        try writer.writeByte(',');
+        try to.write(writer, &line_length);
+    }
+    try writer.writeAll("\r\n");
+}
 
 fn createBoundary(random: std.Random) [36]u8 {
     var boundary: [36]u8 = undefined;

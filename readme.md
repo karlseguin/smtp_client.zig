@@ -102,7 +102,9 @@ try client.quit();
 The `smtp.Message` which is passed to `smtp.send`, `smtp.sendAll` and `client.sendMessage` has the following fields:
 
 * `from: Address` - The address the email is from
-* `to: []const Address` - A list of addresses to send the email to
+* `to: ?[]const Address` - A list of addresses to send the email to
+* `cc: ?[]const Address` - A list of addresses to cc the email to
+* `bcc: ?[]const Address` - A list of addresses to bcc the email to
 * `subject: ?[]const u8 = null` - The subject
 * `text_body: ?[]const u8 = null` -  The Text body
 * `html_body: ?[]const u8 = null` - The HTML body
@@ -112,6 +114,11 @@ The `timestamp: ?i64 = null` field can also be set. This is used when writing th
 
 As an alternative to setting the above fields, the `data: ?[]const u8 = null` field can be set. This is the complete raw data to send following the SMTP `DATA` command. When specified, the rest of the fields are ignored. The `data` must comform to [RFC 2822 - Internet Message Format](https://www.rfc-editor.org/rfc/rfc2822), including a trailing `\r\n.\r\n`. I realize that a union would normally be used to make `data` and the other fields mutually exclusive. However, the use of `data` is considered an advanced feature, and adding union simply makes the API more complicated for 99% of the cases which would not use it.
 
+## Message.Address
+The `Message.Address` structure has two fields:
+
+* `name: ?[]const u8 = null` - the optional name
+* `address: []const u8` - the email address 
 
 ## Performance
 ### Tip 1 - sendAll
