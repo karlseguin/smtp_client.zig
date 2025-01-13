@@ -106,6 +106,10 @@ pub const Stream = struct {
 
     // store messages that are written to the stream
     pub fn writeAll(self: *Stream, data: []const u8) !void {
+        return self.directWrite(data);
+    }
+
+    pub fn directWrite(self: *Stream, data: []const u8) !void {
         const d = self._arena.allocator().dupe(u8, data) catch unreachable;
         self._received.append(d) catch unreachable;
     }
@@ -151,8 +155,19 @@ pub const MockServer = struct {
         @panic("unexpected read");
     }
 
-    // store messages that are written to the stream
     pub fn writeAll(self: *MockServer, data: []const u8) !void {
+        return self.directWrite(data);
+    }
+
+    pub fn flush(_: *MockServer) !void {
+        @panic("not implemented");
+    }
+
+    pub fn writeByte(_: *MockServer, _: u8) !void {
+        @panic("not implemented");
+    }
+
+    pub fn directWrite(self: *MockServer, data: []const u8) !void {
         const index = self.index orelse {
             @panic("received data before server initiated connection");
         };
@@ -176,16 +191,3 @@ pub fn random() std.Random {
         }.fill,
     };
 }
-
-// pub fn random() std.Random {
-//     var tr = TestRandom{};
-//     // hack, safe to take address of (to satisfy std.Random.init), because
-//     // we kow we'll never use it.
-//     return std.Random.init(&tr, TestRandom.fill);
-// }
-
-// const TestRandom = struct {
-//     pub fn fill(_: *const TestRandom, buf: []u8) void {
-//         @memset(buf, 0);
-//     }
-// };

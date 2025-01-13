@@ -18,6 +18,9 @@ pub const Stream = struct {
     stream: net.Stream,
     tls_client: ?tls.Client,
 
+    end: usize = 0,
+    buf: [4096]u8 = undefined,
+
     pub fn init(stream: net.Stream) Stream {
         return .{
             .ca_bundle = null,
@@ -64,8 +67,41 @@ pub const Stream = struct {
     }
 
     pub fn writeAll(self: *Stream, data: []const u8) !void {
+        var end = self.end;
+
+        if (end + data.len > self.buf.len) {
+            try self.flush();
+            end = 0;
+            if (data.len > self.buf.len) {
+                return self.directWrite(data);
+            }
+        }
+
+        const new_end = end + data.len;
+        @memcpy(self.buf[end..new_end], data);
+        self.end = new_end;
+    }
+
+    pub fn writeByte(self: *Stream, data: u8) !void {
+        var end = self.end;
+
+        if (end == self.buf.len) {
+            try self.flush();
+            end = 0;
+        }
+        self.buf[end] = data;
+        self.end = end + 1;
+    }
+
+    pub fn flush(self: *Stream) !void {
+        const data = self.buf[0..self.end];
+        self.end = 0;
+        return self.directWrite(data);
+    }
+
+    pub fn directWrite(self: *Stream, data: []const u8) !void {
         if (self.tls_client) |*tls_client| {
-            return tls_client.writeAll(self.stream, data);
+                return tls_client.writeAll(self.stream, data);
         }
         return self.stream.writeAll(data);
     }

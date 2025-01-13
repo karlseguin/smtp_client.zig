@@ -8,9 +8,9 @@ pub const Message = struct {
     text_body: ?[]const u8 = null,
     html_body: ?[]const u8 = null,
     data: ?[]const u8 = null,
+    timestamp: ?i64 = null,
 
     const WriteOpts = struct {
-        timestamp: ?i64 = null,
         message_id_host: ?[]const u8 = null,
     };
 
@@ -36,12 +36,13 @@ pub const Message = struct {
 
         if (self.subject) |subject| {
             try writer.writeAll("Subject:");
-            try writeHeaderValue(writer, subject);
+            const ve = ValueEncoder.init(subject, false);
+            try ve.write(writer);
             try writer.writeAll("\r\n");
         }
 
         try writer.writeAll("Date: ");
-        try date.write(writer, opts.timestamp orelse std.time.timestamp());
+        try date.write(writer, self.timestamp orelse std.time.timestamp());
         try writer.writeAll("\r\nMIME-Version: 1.0\r\n");
         try writer.writeAll("Message-ID: <");
         try writeMessageId(writer, opts.message_id_host, self.from.address, random);
@@ -84,10 +85,11 @@ pub const Message = struct {
             // +2 for the <> around the address and +1 for the the leading space
             var to_write_length = self.address.len + 3;
 
-            const must_b64, const has_quotes, const name_escape_len = valueEncodedLen(self.name);
-            if (name_escape_len > 0) {
+            var name_encoder: ?ValueEncoder = null;
+            if (self.name) |name| {
+                name_encoder = ValueEncoder.init(name, true);
                 // +1 for the space before the <
-                to_write_length += name_escape_len + 1;
+                to_write_length += name_encoder.?.encoded_len + 1;
             }
 
             const current_line_length = line_length.*;
@@ -98,8 +100,8 @@ pub const Message = struct {
                 line_length.* = current_line_length + to_write_length;
             }
 
-            if (self.name) |name| {
-                try writeHeaderValueAs(writer, name, must_b64, has_quotes, name_escape_len);
+            if (name_encoder) |ne| {
+                try ne.write(writer);
             }
             try writer.writeAll(" <");
             try writer.writeAll(self.address);
@@ -107,79 +109,6 @@ pub const Message = struct {
         }
     };
 };
-
-fn writeHeaderValue(writer: anytype, value: []const u8) !void {
-    const must_b64, const has_quotes, const encoded_len = valueEncodedLen(value);
-    return writeHeaderValueAs(writer, value, must_b64, has_quotes, encoded_len);
-}
-
-fn writeHeaderValueAs(writer: anytype, value: []const u8, must_b64: bool, has_quotes: bool, encoded_len: usize) !void {
-    try writer.writeByte(' ');
-    if (encoded_len == value.len) {
-        return writer.writeAll(value);
-    }
-
-    if (must_b64) {
-        return writeValueAsBase64(writer, value);
-    }
-
-    try writer.writeByte('"');
-    if (has_quotes == false) {
-        try writer.writeAll(value);
-    } else {
-        for (value) |b| {
-            if (b == '"') {
-                try writer.writeByte('\\');
-            }
-            try writer.writeByte(b);
-        }
-    }
-    return writer.writeByte('"');
-}
-
-fn valueEncodedLen(value_: ?[]const u8) struct{bool, bool, usize} {
-    const value = value_ orelse return .{false, false, 0};
-
-    var b64 = false;
-    var needs_quote = false;
-    var double_quote_count: usize = 0;
-
-    for (value) |b| {
-        switch (b) {
-            'a'...'z', 'A'...'Z', '0'...'9', ' ' => {},
-            '"' => {
-                needs_quote = true;
-                double_quote_count += 1;
-            },
-            0...31, 126...255 => {
-                b64 = true;
-                break;
-            },
-            else => needs_quote = true,
-        }
-    }
-
-    if (b64) {
-        // 10 bytes of overhead for the =?UTF-8?B?
-        // 2 bytes overhead for the ?= suffix
-        return .{true, false, 12 + std.base64.standard.Encoder.calcSize(value.len)};
-    }
-
-    var len = value.len;
-    if (needs_quote) {
-        // for the two wrapping double quotes
-        len += 2;
-    }
-
-    // each double quote will require 1 escape
-    return .{false, needs_quote, len + double_quote_count};
-}
-
-fn writeValueAsBase64(writer: anytype, value: []const u8) !void {
-    try writer.writeAll("=?UTF-8?B?");
-    try std.base64.standard.Encoder.encodeWriter(writer, value);
-    return writer.writeAll("?=");
-}
 
 fn createBoundary(random: std.Random) [36]u8 {
     var boundary: [36]u8 = undefined;
@@ -295,7 +224,7 @@ fn QuotedPrintableWriter(comptime T: type, comptime max_line_length: usize) type
             defer self.line_length = line_length;
 
             for (data) |b| {
-                if (b != 61 and ((b >= 33 and b <= 126) or b == ' ' or b == '\t')) {
+                if (b != '=' and b != '.' and ((b >= 33 and b <= 126) or b == ' ' or b == '\t')) {
                     if (line_length == end_column) {
                         try w.writeAll("=\r\n");
                         line_length = 1;
@@ -318,6 +247,103 @@ fn QuotedPrintableWriter(comptime T: type, comptime max_line_length: usize) type
         }
     };
 }
+
+const ValueEncoder = struct {
+    value: []const u8,
+    encoder: Encoder,
+    encoded_len: usize,
+
+    const Encoder = enum {
+        none,
+        base64,
+        quoted,
+    };
+
+    // 10 bytes of overhead for the =?UTF-8?B? prefix
+    // 2 bytes overhead for the ?= suffix
+    const ENCODING_OVERHEAD = 12;
+
+    fn init(value: []const u8, allow_quoted: bool) ValueEncoder {
+        var base64 = false;
+        var needs_quote = false;
+        var double_quote_count: usize = 0;
+
+        for (value) |b| {
+            switch (b) {
+                0...31, 127...255 => {
+                    base64 = true;
+                    break;
+                },
+                'a'...'z', 'A'...'Z', '0'...'9', ' ' => {},
+                '"' => {
+                    if (allow_quoted == false) {
+                        base64 = true;
+                        break;
+                    }
+                    needs_quote = true;
+                    double_quote_count += 1;
+                },
+                else => {
+                    if (allow_quoted == false) {
+                        base64 = true;
+                        break;
+                    }
+                    needs_quote = true;
+                },
+            }
+        }
+
+        if (base64) {
+             return .{
+                .value = value,
+                .encoder = .base64,
+                .encoded_len = ENCODING_OVERHEAD + std.base64.standard.Encoder.calcSize(value.len),
+            };
+        }
+
+        var encoded_len = value.len + double_quote_count;
+        if (needs_quote) {
+            encoded_len += 2;
+        }
+
+        return .{
+            .value = value,
+            .encoded_len = encoded_len,
+            .encoder = if (needs_quote) .quoted else .none,
+        };
+    }
+
+    fn write(self: *const ValueEncoder, writer: anytype) !void {
+        const value = self.value;
+        switch (self.encoder) {
+            .none => {
+                try writer.writeByte(' ');
+                return writer.writeAll(value);
+            },
+            .base64 => {
+                try writer.writeAll(" =?UTF-8?B?");
+                try std.base64.standard.Encoder.encodeWriter(writer, value);
+                return writer.writeAll("?=");
+            },
+            .quoted => {
+                try writer.writeAll(" \"");
+                if (self.encoded_len == value.len + 2) {
+                    // if this is true, then all we need to do is write the value
+                    // as-is, between quotes.
+                    try writer.writeAll(value);
+                } else {
+                    for (value) |b| {
+                        if (b == '"') {
+                            try writer.writeByte('\\');
+                        }
+                        try writer.writeByte(b);
+                    }
+                }
+                return writer.writeByte('"');
+            }
+        }
+    }
+};
 
 // TODO: surely zig's std should expose something like this?
 const backend_supports_vectors = switch (@import("builtin").zig_backend) {
@@ -486,7 +512,7 @@ test "Message: subject" {
     },
         "From: <a>\r\n" ++
         "To: <b>\r\n" ++
-        "Subject: \"Hello.You\"\r\n" ++
+        "Subject: =?UTF-8?B?SGVsbG8uWW91?=\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
@@ -520,8 +546,8 @@ test "Message: body quoted-printable" {
     try testWriteMessage(.{
         .from = .{.address = "a"},
         .to = &.{.{.address = "b"}},
-        .text_body = "Hello"
-    }, common_qp_prefix ++ "Hello\r\n", .{});
+        .text_body = "Hello\r\n."
+    }, common_qp_prefix ++ "Hello=0D=0A=2E\r\n", .{});
 
     try testWriteMessage(.{
         .from = .{.address = "a"},
@@ -685,11 +711,11 @@ fn testWriteMessage(m: Message, expected: []const u8, opts: Message.WriteOpts) !
     var buf = std.ArrayList(u8).init(t.allocator);
     defer buf.deinit();
 
-    var forced_opts = opts;
-    if (opts.timestamp == null) {
-        forced_opts.timestamp = 1736737238;
+    var message_copy = m;
+    if (m.timestamp == null) {
+        message_copy.timestamp = 1736737238;
     }
-    try m.write(buf.writer(), t.random(), forced_opts);
+    try message_copy.write(buf.writer(), t.random(), opts);
     try t.expectString(expected, buf.items);
 }
 

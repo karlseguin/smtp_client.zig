@@ -93,7 +93,7 @@ test "send: unencrypted single to" {
     });
 
     var sent: usize = 0;
-    var c = client.Client(t.MockServer).init(ms, .{
+    var c = try client.Client(t.MockServer).init(ms, .{
         .port = 0,
         .host = "localhost",
     });
@@ -120,7 +120,7 @@ test "send: scram-md5 + multiple to" {
     });
 
     var sent: usize = 0;
-    var c = client.Client(t.MockServer).init(ms, .{
+    var c = try client.Client(t.MockServer).init(ms, .{
         .port = 0,
         .host = "localhost",
         .username = "leto",
@@ -150,7 +150,7 @@ test "sendAll: success" {
     });
 
     var sent: usize = 0;
-    var c = client.Client(t.MockServer).init(ms, .{
+    var c = try client.Client(t.MockServer).init(ms, .{
         .port = 0,
         .host = "localhost",
     });
@@ -183,7 +183,7 @@ test "sendAll: partial" {
     });
 
     var sent: usize = 0;
-    var c = client.Client(t.MockServer).init(ms, .{
+    var c = try client.Client(t.MockServer).init(ms, .{
         .port = 0,
         .host = "localhost",
     });
