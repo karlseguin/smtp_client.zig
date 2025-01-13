@@ -1,4 +1,5 @@
 const std = @import("std");
+const date = @import("date.zig");
 
 pub const Message = struct {
     from: Address,
@@ -9,6 +10,7 @@ pub const Message = struct {
     data: ?[]const u8 = null,
 
     const WriteOpts = struct {
+        timestamp: ?i64 = null,
         message_id_host: ?[]const u8 = null,
     };
 
@@ -38,7 +40,9 @@ pub const Message = struct {
             try writer.writeAll("\r\n");
         }
 
-        try writer.writeAll("MIME-Version: 1.0\r\n");
+        try writer.writeAll("Date: ");
+        try date.write(writer, opts.timestamp orelse std.time.timestamp());
+        try writer.writeAll("\r\nMIME-Version: 1.0\r\n");
         try writer.writeAll("Message-ID: <");
         try writeMessageId(writer, opts.message_id_host, self.from.address, random);
         try writer.writeAll(">\r\n");
@@ -353,6 +357,7 @@ test "Message: address simple" {
     },
         "From: <leto@example.com>\r\n" ++
         "To: <ghanima@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -364,6 +369,7 @@ test "Message: address simple" {
     },
         "From: Leto <leto@example.com>\r\n" ++
         "To: Ghanima <ghanima@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -375,6 +381,7 @@ test "Message: address simple" {
     },
         "From: Leto <from@example.org>\r\n" ++
         "To: Ghanima <ghanima@example.com>, <paul@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.org>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -386,6 +393,7 @@ test "Message: address simple" {
     },
         "From: Leto <from@example.com>\r\n" ++
         "To: Ghanima <ghanima@example.com>, Paul <paul@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -399,6 +407,7 @@ test "Message: address encoding" {
     },
         "From: \"Mr. Leto\" <leto@example.com>\r\n" ++
         "To: <ghanima@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -410,6 +419,7 @@ test "Message: address encoding" {
     },
         "From: \"Mr. \\\"Leto\\\"\" <leto@example.com>\r\n" ++
         "To: <ghanima@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -421,6 +431,7 @@ test "Message: address encoding" {
     },
         "From: =?UTF-8?B?4pyU?= <c@example.com>\r\n" ++
         "To: =?UTF-8?B?TXIuIPCfkbs=?= <ghost@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -434,6 +445,7 @@ test "Message: address folding" {
     },
         "From: <leto@example.com>\r\n" ++
         "To:\r\n <" ++ "a" ** 100 ++ "@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -445,6 +457,7 @@ test "Message: address folding" {
     },
         "From: <leto@example.com>\r\n" ++
         "To: <ghanima@example.com>,\r\n Mr A <" ++ "a" ** 100 ++ "@example.com>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -460,6 +473,7 @@ test "Message: subject" {
         "From: <a>\r\n" ++
         "To: <b>\r\n" ++
         "Subject: Hello\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -473,6 +487,7 @@ test "Message: subject" {
         "From: <a>\r\n" ++
         "To: <b>\r\n" ++
         "Subject: \"Hello.You\"\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -486,6 +501,7 @@ test "Message: subject" {
         "From: <a>\r\n" ++
         "To: <b>\r\n" ++
         "Subject: =?UTF-8?B?RW5qb3kgQmV0dGVyIFBlcmZvcm1hbmNlIOKclOKclOKclA==?=\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n"
@@ -495,6 +511,7 @@ test "Message: subject" {
 test "Message: body quoted-printable" {
     const common_qp_prefix = "From: <a>\r\n" ++
         "To: <b>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n" ++
@@ -552,6 +569,7 @@ test "Message: body quoted-printable" {
 test "Message: body base64" {
     const common_b64_prefix = "From: <a>\r\n" ++
         "To: <b>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/plain; charset=utf-8\r\n" ++
@@ -598,6 +616,7 @@ test "Message: body html" {
         .html_body = "<b>ƒ</b>",
     }, "From: <a>\r\n" ++
         "To: <b>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/html; charset=utf-8\r\n" ++
@@ -611,6 +630,7 @@ test "Message: body html" {
         .html_body = "<b>h=i</b>",
     }, "From: <a>\r\n" ++
         "To: <b>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/html; charset=utf-8\r\n" ++
@@ -627,6 +647,7 @@ test "Message: body multipart" {
         .html_body = "<b>ƒ</b>",
     }, "From: <a>\r\n" ++
         "To: <b>\r\n" ++
+        "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: multipart/alternative;\r\n" ++
@@ -664,7 +685,11 @@ fn testWriteMessage(m: Message, expected: []const u8, opts: Message.WriteOpts) !
     var buf = std.ArrayList(u8).init(t.allocator);
     defer buf.deinit();
 
-    try m.write(buf.writer(), t.random(), opts);
+    var forced_opts = opts;
+    if (opts.timestamp == null) {
+        forced_opts.timestamp = 1736737238;
+    }
+    try m.write(buf.writer(), t.random(), forced_opts);
     try t.expectString(expected, buf.items);
 }
 
