@@ -5,7 +5,7 @@ const month_names = [_][]const u8{"", "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
 pub fn write(writer: anytype, ts: i64) !void {
     const date = getDate(ts);
     const time = getTime(ts);
-    return std.fmt.format(writer, "{d} {s} {d} {d:02}:{d:02}:{d:02} +0000", .{date.day, month_names[date.month], date.year, time.hour, time.min, time.sec});
+    return std.fmt.format(writer, "{d:02} {s} {d} {d:02}:{d:02}:{d:02} +0000", .{date.day, month_names[date.month], date.year, time.hour, time.min, time.sec});
 }
 
 const Date = struct {
