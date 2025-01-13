@@ -51,17 +51,12 @@ pub fn main() !void {
   try smtp.send(.{
     .from = "admin@localhost",
     .to = &.{"user@localhost"},
-    .data = "From: Admin <admin@localhost>\r\nTo: User <user@localhost>\r\nSubject: Test\r\n\r\nThis is karl, I'm testing a SMTP client for Zig\r\n.\r\n",
+    .subject = "This is the Subject"
+    .text_body = "This is the text body",
+    .html_body = "<b>This is the html body</b>",
   }, config);
 }
 ```
-
-Note that the `data` field above must conform to [RFC 2822 - Internet Message Format](https://www.rfc-editor.org/rfc/rfc2822). Notably:
-* Lines have a maximum length of 1000 (including the trailing `\r\n`)
-* Any line that begins with a '.' must be escaped with a '.' (in regex talk: `s/^\./../`)
-* The message must be terminated with a `\r\n.\r\n`  (yes, the dot in there is intentional)
-
-I plan on adding some type of `builder` to help with generating a valid `data` payload.
 
 ## Encryption
 Prefer using `.encryption = .tls` where possible. Most modern email vendors provide SMTP over TLS and support TLS 1.3. 
@@ -75,7 +70,7 @@ Prefer using `.encryption = .tls` where possible. Most modern email vendors prov
 Regardless of the encryption setting, the library will favor authenticating via `CRAM-MD5` if the server supports it.
 
 # Client
-The `send` and `sendAll` functions are wrappers around an `smtp.Client`. Where `send` and `sendAll` open a connection, send one or more messages and then close the connection, an `smtp.Client` keeps the connection open until `deinit` is called. The client is **not** thread safe.
+The `smtp.send` and `smtp.sendAll` functions are wrappers around an `smtp.Client`. Where `send` and `sendAll` open a connection, send one or more messages and then close the connection, an `smtp.Client` keeps the connection open until `deinit` is called. The client is **not** thread safe.
 
 ```zig
 var client = try smtp.connect({
@@ -92,15 +87,31 @@ try client.hello();
 try client.auth();
 
 // Multiple messages can be sent here
-try client.from("email1@example.com");
-try client.to(&.{"recipient@example.com"});
-try client.data("From: Admin <email1@example.com>\r\nTo: User <recipient@example.com>\r\nSuject: Test\r\n\r\nThis is a test email from Zig\r\n.\r\n");
+try client.sendMessage(.{
+    .subject = "This is the Subject"
+    .text_body = "This is the text body",
+});
 
-// One this is called, no more messages can be sent
+// Once this is called, no more messages can be sent
 try client.quit();
 ```
 
-`hello` and `auth` can be called upfront, while `from`, `to` and `data` can be called repeatedly (protected by a mutex if thread-safety is needed).
+`hello` and `auth` can be called upfront, while `from`, `to` and `sendMessage` can be called repeatedly. To make the Client thread safe, protect the call to `sendMessage` with a mutex.
+
+# Message
+The `smtp.Message` which is passed to `smtp.send`, `smtp.sendAll` and `client.sendMessage` has the following fields:
+
+* `from: Address` - The address the email is from
+* `to: []const Address` - A list of addresses to send the email to
+* `subject: ?[]const u8 = null` - The subject
+* `text_body: ?[]const u8 = null` -  The Text body
+* `html_body: ?[]const u8 = null` - The HTML body
+
+
+The `timestamp: ?i64 = null` field can also be set. This is used when writing the `Date` header. By default `std.time.timestamp`. Only advance usage should set this.
+
+As an alternative to setting the above fields, the `data: ?[]const u8 = null` field can be set. This is the complete raw data to send following the SMTP `DATA` command. When specified, the rest of the fields are ignored. The `data` must comform to [RFC 2822 - Internet Message Format](https://www.rfc-editor.org/rfc/rfc2822), including a trailing `\r\n.\r\n`. I realize that a union would normally be used to make `data` and the other fields mutually exclusive. However, the use of `data` is considered an advanced feature, and adding union simply makes the API more complicated for 99% of the cases which would not use it.
+
 
 ## Performance
 ### Tip 1 - sendAll
@@ -116,12 +127,14 @@ The `sendAll` function takes an array of `smtp.Message`. It is much more efficie
     .{
       .from = "...",
       .to = &.{"..."},
-      .data = "...",
+      .subject = "...",
+      .text_body = "...",
     },
     .{
       .from = "...",
       .to = &.{"..."},
-      .data = "...",
+      .subject = "...",
+      .text_body = "...",
     }
   };
   try smtp.sendAll(&messages, config, &sent);
@@ -147,7 +160,7 @@ var config = smtp.Config{
   .port = 25,
   .host = "localhost",
   .encryption = .tls,
-  .ca_bundle = ca_bundle,  
+  .ca_bundle = ca_bundle,
   // ...
 };
 ```
