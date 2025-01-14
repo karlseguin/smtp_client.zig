@@ -52,17 +52,23 @@ pub fn Client(comptime S: type) type {
             }
 
             self.reader = try Reader(*S).init(&self.stream, config.timeout);
+
+
+            // server should send the first message
+            const code = (try self.reader.read()).code;
+            if (code != 220) {
+                return errorFromCode(code);
+            }
+            return self._hello();
+        }
+
+        // When StartSSL is used, we send 2 hellos - one after we've upgraded
+        // to TLS. This 2nd hello doesn't have to setup things (like the reader)
+        // like the first one.
+        fn _hello(self: *Self) !void {
+            const buf = &self.buf;
             var reader = &self.reader;
 
-            {
-                // server should send the first message
-                const code = (try reader.read()).code;
-                if (code != 220) {
-                    return errorFromCode(code);
-                }
-            }
-
-            const buf = &self.buf;
             const msg = try std.fmt.bufPrint(buf, "EHLO {s}\r\n", .{self.config.local_name});
             try self.stream.directWrite(msg);
 
@@ -98,7 +104,7 @@ pub fn Client(comptime S: type) type {
                 return errorFromCode(code);
             }
             try self.stream.toTLS(&self.config);
-            return self.hello();
+            return self._hello();
         }
 
         pub fn auth(self: *Self) !void {
