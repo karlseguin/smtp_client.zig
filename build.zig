@@ -5,6 +5,8 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const smtp_client = b.addModule("smtp_client", .{
+        .target = target,
+        .optimize = optimize,
         .root_source_file = b.path("src/smtp.zig"),
     });
 
@@ -12,9 +14,7 @@ pub fn build(b: *std.Build) !void {
         // example
         const exe = b.addExecutable(.{
             .name = "smtp_client_demo",
-            .root_source_file = b.path("example/main.zig"),
-            .target = target,
-            .optimize = optimize,
+            .root_module = smtp_client,
         });
         exe.linkLibC();
         exe.root_module.addImport("smtp_client", smtp_client);
@@ -33,9 +33,7 @@ pub fn build(b: *std.Build) !void {
     {
         // tests
         const lib_test = b.addTest(.{
-            .root_source_file = b.path("src/smtp.zig"),
-            .target = target,
-            .optimize = optimize,
+            .root_module = smtp_client,
             .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
         });
         const run_test = b.addRunArtifact(lib_test);

@@ -318,7 +318,7 @@ pub fn Client(comptime S: type) type {
 
             var temp: [16]u8 = undefined;
             std.crypto.auth.hmac.HmacMd5.create(&temp, config.password.?, secret);
-            const hex = std.fmt.fmtSliceHexLower(&temp);
+            const hex = std.fmt.bytesToHex(&temp, .lower);
 
             const answer = try std.fmt.bufPrint(&self.buf, "{s} {s}\r\n", .{ config.username.?, hex });
             try self.stream.directWrite(answer);
