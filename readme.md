@@ -36,7 +36,7 @@ const std = @import("std");
 const smtp = @import("smtp_client");
 
 pub fn main() !void {
-  var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+  var gpa: std.heap.DebugAllocator(.{}) = .init;
   const allocator = gpa.allocator();
 
   const config = smtp.Config{
@@ -49,9 +49,9 @@ pub fn main() !void {
   };
 
   try smtp.send(.{
-    .from = "admin@localhost",
-    .to = &.{"user@localhost"},
-    .subject = "This is the Subject"
+    .from = .{.address = "admin@localhost"},
+    .to = &.{.{.address = "user@localhost"}},
+    .subject = "This is the Subject",
     .text_body = "This is the text body",
     .html_body = "<b>This is the html body</b>",
   }, config);
@@ -180,12 +180,6 @@ Similarly, instead of `connect` to create a `Client`, `connectTo` can be used wh
 ### Allocator
 `config.allocator` is required in two cases:
 1. `send`, `sendAll` or `connect` are used, OR
-2. `config.ca_bundle` is not specified and `.tls` or `.start_tls` are used
-
-Put differently, `config.allocator` can be null when both these cases are true:
-1. `sendTo`, `sendAllTo` or `connectTo` are used, AND
-2. `config.ca_bundle` is provided or `.encryption` is set to `.none` or `.insecure`.
-
-Put differently again, `config.allocator` is only used by the library to (a) call `std.net.tcpConnectToHost` which does a DNS lookup and (b) manage the `std.crypto.Certificate.Bundle`.
+2. `.tls` or `.start_tls` are used
 
 If `config.allocator` is required but not specified, the code will return an error.

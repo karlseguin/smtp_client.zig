@@ -53,7 +53,6 @@ pub fn Client(comptime S: type) type {
 
             self.reader = try Reader(*S).init(&self.stream, config.timeout);
 
-
             // server should send the first message
             const code = (try self.reader.read()).code;
             if (code != 220) {

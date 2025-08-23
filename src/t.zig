@@ -37,14 +37,14 @@ pub const Stream = struct {
             ._read_index = 0,
             ._arena = std.heap.ArenaAllocator.init(allocator),
             ._random = std.Random.DefaultPrng.init(seed),
-            ._to_read = std.ArrayList(u8).init(allocator),
-            ._received = std.ArrayList([]const u8).init(allocator),
+            ._to_read = .empty,
+            ._received = .empty,
         };
     }
 
     pub fn deinit(self: *Stream) void {
-        self._to_read.deinit();
-        self._received.deinit();
+        self._to_read.deinit(allocator);
+        self._received.deinit(allocator);
         self._arena.deinit();
     }
 
@@ -67,7 +67,7 @@ pub const Stream = struct {
     }
 
     pub fn add(self: *Stream, value: []const u8) void {
-        self._to_read.appendSlice(value) catch unreachable;
+        self._to_read.appendSlice(allocator, value) catch unreachable;
     }
 
     pub fn read(self: *Stream, buf: []u8) !usize {
@@ -111,7 +111,7 @@ pub const Stream = struct {
 
     pub fn directWrite(self: *Stream, data: []const u8) !void {
         const d = self._arena.allocator().dupe(u8, data) catch unreachable;
-        self._received.append(d) catch unreachable;
+        self._received.append(allocator, d) catch unreachable;
     }
 
     pub fn close(self: *Stream) void {

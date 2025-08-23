@@ -719,22 +719,22 @@ test "Message: message-id" {
 }
 
 fn testWriteMessage(m: Message, expected: []const u8, opts: Message.WriteOpts) !void {
-    var buf = std.ArrayList(u8).init(t.allocator);
-    defer buf.deinit();
+    var buf: std.ArrayList(u8) = .empty;
+    defer buf.deinit(t.allocator);
 
     var message_copy = m;
     if (m.timestamp == null) {
         message_copy.timestamp = 1736737238;
     }
-    try message_copy.write(buf.writer(), t.random(), opts);
+    try message_copy.write(buf.writer(t.allocator), t.random(), opts);
     try t.expectString(expected, buf.items);
 }
 
 fn testWriteMessageContains(m: Message, contains: []const u8, opts: Message.WriteOpts) !void {
-    var buf = std.ArrayList(u8).init(t.allocator);
-    defer buf.deinit();
+    var buf: std.ArrayList(u8) = .empty;
+    defer buf.deinit(t.allocator);
 
-    try m.write(buf.writer(), t.random(), opts);
+    try m.write(buf.writer(t.allocator), t.random(), opts);
     if (std.mem.indexOf(u8, buf.items, contains) == null) {
         std.debug.print("Expected the message to contain: '{s}'.\n\nThe Full message is\n============\n{s}\n============\n", .{contains, buf.items});
         return error.NotContained;
