@@ -131,7 +131,7 @@ fn createBoundary(random: std.Random) [36]u8 {
 fn writeMessageId(writer: anytype, configured_host: ?[]const u8, from: []const u8, random: std.Random) !void {
     const host = configured_host orelse blk: {
         const i = std.mem.indexOfScalar(u8, from, '@') orelse break :blk "localhost";
-        break :blk from[i+1..];
+        break :blk from[i + 1 ..];
     };
     var id: [32]u8 = undefined;
     randomHex(16, &id, random);
@@ -168,9 +168,9 @@ fn Writer(comptime T: type, comptime max_line_length: usize) type {
         const Self = @This();
         fn from(writer: T, data: []const u8) Self {
             if (hasHighBit(data)) {
-                return .{.b64 = Base64Writer(T, max_line_length){.w = writer}};
+                return .{ .b64 = Base64Writer(T, max_line_length){ .w = writer } };
             }
-            return .{.qp = QuotedPrintableWriter(T, max_line_length){.w = writer}};
+            return .{ .qp = QuotedPrintableWriter(T, max_line_length){ .w = writer } };
         }
 
         fn write(self: *Self, data: []const u8) !void {
@@ -242,10 +242,10 @@ fn QuotedPrintableWriter(comptime T: type, comptime max_line_length: usize) type
                     } else {
                         line_length += 1;
                     }
-                   try w.writeByte(b);
+                    try w.writeByte(b);
                 } else {
                     const remaining = max_line_length - line_length;
-                    const encoded = [_]u8{'=', charset[b >> 4], charset[b & 15]};
+                    const encoded = [_]u8{ '=', charset[b >> 4], charset[b & 15] };
                     if (remaining < 4) {
                         try w.writeAll("=\r\n");
                         line_length = 3;
@@ -305,7 +305,7 @@ const ValueEncoder = struct {
         }
 
         if (base64) {
-             return .{
+            return .{
                 .value = value,
                 .encoder = .base64,
                 .encoded_len = ENCODING_OVERHEAD + std.base64.standard.Encoder.calcSize(value.len),
@@ -351,7 +351,7 @@ const ValueEncoder = struct {
                     }
                 }
                 return writer.writeByte('"');
-            }
+            },
         }
     }
 };
@@ -369,12 +369,12 @@ fn hasHighBit(value: []const u8) bool {
     if (comptime backend_supports_vectors) {
         if (comptime std.simd.suggestVectorLength(u8)) |vector_len| {
             while (remaining.len > vector_len) {
-                    const block: @Vector(vector_len, u8) = remaining[0..vector_len].*;
-                    if (@reduce(.Max, block) > 127) {
-                        return true;
-                    }
-                    remaining = remaining[vector_len..];
+                const block: @Vector(vector_len, u8) = remaining[0..vector_len].*;
+                if (@reduce(.Max, block) > 127) {
+                    return true;
                 }
+                remaining = remaining[vector_len..];
+            }
         }
     }
 
@@ -389,160 +389,124 @@ const t = @import("t.zig");
 
 test "Message: address simple" {
     try testWriteMessage(.{
-        .from = .{.address = "leto@example.com"},
-        .to = &.{.{.address = "ghanima@example.com"}},
-    },
-        "From: <leto@example.com>\r\n" ++
+        .from = .{ .address = "leto@example.com" },
+        .to = &.{.{ .address = "ghanima@example.com" }},
+    }, "From: <leto@example.com>\r\n" ++
         "To: <ghanima@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "leto@example.com", .name = "Leto"},
-        .to = &.{.{.address = "ghanima@example.com", .name = "Ghanima"}},
-    },
-        "From: Leto <leto@example.com>\r\n" ++
+        .from = .{ .address = "leto@example.com", .name = "Leto" },
+        .to = &.{.{ .address = "ghanima@example.com", .name = "Ghanima" }},
+    }, "From: Leto <leto@example.com>\r\n" ++
         "To: Ghanima <ghanima@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "from@example.org", .name = "Leto"},
-        .to = &.{.{.address = "ghanima@example.com", .name = "Ghanima"}, .{.address = "paul@example.com"}},
-    },
-        "From: Leto <from@example.org>\r\n" ++
+        .from = .{ .address = "from@example.org", .name = "Leto" },
+        .to = &.{ .{ .address = "ghanima@example.com", .name = "Ghanima" }, .{ .address = "paul@example.com" } },
+    }, "From: Leto <from@example.org>\r\n" ++
         "To: Ghanima <ghanima@example.com>, <paul@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.org>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "from@example.com", .name = "Leto"},
-        .to = &.{.{.address = "ghanima@example.com", .name = "Ghanima"}, .{.address = "paul@example.com", .name = "Paul"}},
-    },
-        "From: Leto <from@example.com>\r\n" ++
+        .from = .{ .address = "from@example.com", .name = "Leto" },
+        .to = &.{ .{ .address = "ghanima@example.com", .name = "Ghanima" }, .{ .address = "paul@example.com", .name = "Paul" } },
+    }, "From: Leto <from@example.com>\r\n" ++
         "To: Ghanima <ghanima@example.com>, Paul <paul@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 }
 
 test "Message: address encoding" {
     try testWriteMessage(.{
-        .from = .{.address = "leto@example.com", .name = "Mr. Leto"},
-        .to = &.{.{.address = "ghanima@example.com"}},
-    },
-        "From: \"Mr. Leto\" <leto@example.com>\r\n" ++
+        .from = .{ .address = "leto@example.com", .name = "Mr. Leto" },
+        .to = &.{.{ .address = "ghanima@example.com" }},
+    }, "From: \"Mr. Leto\" <leto@example.com>\r\n" ++
         "To: <ghanima@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "leto@example.com", .name = "Mr. \"Leto\""},
-        .to = &.{.{.address = "ghanima@example.com"}},
-    },
-        "From: \"Mr. \\\"Leto\\\"\" <leto@example.com>\r\n" ++
+        .from = .{ .address = "leto@example.com", .name = "Mr. \"Leto\"" },
+        .to = &.{.{ .address = "ghanima@example.com" }},
+    }, "From: \"Mr. \\\"Leto\\\"\" <leto@example.com>\r\n" ++
         "To: <ghanima@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "c@example.com", .name = "✔"},
-        .to = &.{.{.address = "ghost@example.com", .name = "Mr. 👻"}},
-    },
-        "From: =?UTF-8?B?4pyU?= <c@example.com>\r\n" ++
+        .from = .{ .address = "c@example.com", .name = "✔" },
+        .to = &.{.{ .address = "ghost@example.com", .name = "Mr. 👻" }},
+    }, "From: =?UTF-8?B?4pyU?= <c@example.com>\r\n" ++
         "To: =?UTF-8?B?TXIuIPCfkbs=?= <ghost@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 }
 
 test "Message: address folding" {
     try testWriteMessage(.{
-        .from = .{.address = "leto@example.com"},
-        .to = &.{.{.address = "a" ** 100 ++ "@example.com"}},
-    },
-        "From: <leto@example.com>\r\n" ++
+        .from = .{ .address = "leto@example.com" },
+        .to = &.{.{ .address = "a" ** 100 ++ "@example.com" }},
+    }, "From: <leto@example.com>\r\n" ++
         "To:\r\n <" ++ "a" ** 100 ++ "@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "leto@example.com"},
-        .to = &.{.{.address = "ghanima@example.com"}, .{.address = "a" ** 100 ++ "@example.com", .name = "Mr A"}},
-    },
-        "From: <leto@example.com>\r\n" ++
+        .from = .{ .address = "leto@example.com" },
+        .to = &.{ .{ .address = "ghanima@example.com" }, .{ .address = "a" ** 100 ++ "@example.com", .name = "Mr A" } },
+    }, "From: <leto@example.com>\r\n" ++
         "To: <ghanima@example.com>,\r\n Mr A <" ++ "a" ** 100 ++ "@example.com>\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@example.com>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 }
 
 test "Message: subject" {
-    try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
-        .subject = "Hello"
-    },
-        "From: <a>\r\n" ++
+    try testWriteMessage(.{ .from = .{ .address = "a" }, .to = &.{.{ .address = "b" }}, .subject = "Hello" }, "From: <a>\r\n" ++
         "To: <b>\r\n" ++
         "Subject: Hello\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 
-    try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
-        .subject = "Hello.You"
-    },
-        "From: <a>\r\n" ++
+    try testWriteMessage(.{ .from = .{ .address = "a" }, .to = &.{.{ .address = "b" }}, .subject = "Hello.You" }, "From: <a>\r\n" ++
         "To: <b>\r\n" ++
         "Subject: =?UTF-8?B?SGVsbG8uWW91?=\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 
-    try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
-        .subject = "Enjoy Better Performance ✔✔✔"
-    },
-        "From: <a>\r\n" ++
+    try testWriteMessage(.{ .from = .{ .address = "a" }, .to = &.{.{ .address = "b" }}, .subject = "Enjoy Better Performance ✔✔✔" }, "From: <a>\r\n" ++
         "To: <b>\r\n" ++
         "Subject: =?UTF-8?B?RW5qb3kgQmV0dGVyIFBlcmZvcm1hbmNlIOKclOKclOKclA==?=\r\n" ++
         "Date: 13 Jan 2025 03:00:38 +0000\r\n" ++
         "MIME-Version: 1.0\r\n" ++
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
-        "Content-Type: text/plain; charset=utf-8\r\n"
-    , .{});
+        "Content-Type: text/plain; charset=utf-8\r\n", .{});
 }
 
 test "Message: body quoted-printable" {
@@ -554,53 +518,37 @@ test "Message: body quoted-printable" {
         "Content-Type: text/plain; charset=utf-8\r\n" ++
         "Content-Transfer-Encoding: quoted-printable\r\n\r\n";
 
-    try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
-        .text_body = "Hello\r\n."
-    }, common_qp_prefix ++ "Hello=0D=0A=2E\r\n", .{});
+    try testWriteMessage(.{ .from = .{ .address = "a" }, .to = &.{.{ .address = "b" }}, .text_body = "Hello\r\n." }, common_qp_prefix ++ "Hello=0D=0A=2E\r\n", .{});
+
+    try testWriteMessage(.{ .from = .{ .address = "a" }, .to = &.{.{ .address = "b" }}, .text_body = "a" ** 76 }, common_qp_prefix ++ "a" ** 75 ++ "=\r\na\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
-        .text_body = "a" ** 76
-    }, common_qp_prefix ++ "a" ** 75 ++ "=\r\na\r\n", .{});
-
-    try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "Hello==World",
     }, common_qp_prefix ++ "Hello=3D=3DWorld\r\n", .{});
 
-    try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
-        .text_body = "a" ** 75 ++ "\tb"
-    }, common_qp_prefix ++ "a" ** 75 ++ "=\r\n\tb\r\n", .{});
+    try testWriteMessage(.{ .from = .{ .address = "a" }, .to = &.{.{ .address = "b" }}, .text_body = "a" ** 75 ++ "\tb" }, common_qp_prefix ++ "a" ** 75 ++ "=\r\n\tb\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  12313    \x14 999",
     }, common_qp_prefix ++ "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  12313    =14 =\r\n999\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  12313     \x14 999",
     }, common_qp_prefix ++ "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  12313     =14=\r\n 999\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  12313      \x14 999",
     }, common_qp_prefix ++ "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  12313      =\r\n=14 999\r\n", .{});
 
-    try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
-        .text_body = "a" ** 300
-    }, common_qp_prefix ++ "a" ** 75 ++ "=\r\n" ++ "a" ** 75 ++ "=\r\n" ++ "a" ** 75 ++ "=\r\n" ++ "a" ** 75 ++ "\r\n", .{});
+    try testWriteMessage(.{ .from = .{ .address = "a" }, .to = &.{.{ .address = "b" }}, .text_body = "a" ** 300 }, common_qp_prefix ++ "a" ** 75 ++ "=\r\n" ++ "a" ** 75 ++ "=\r\n" ++ "a" ** 75 ++ "=\r\n" ++ "a" ** 75 ++ "\r\n", .{});
 }
 
 test "Message: body base64" {
@@ -613,26 +561,26 @@ test "Message: body base64" {
         "Content-Transfer-Encoding: base64\r\n\r\n";
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "ƒ",
     }, common_b64_prefix ++ "xpI=\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "ƒ" ** 28,
     }, common_b64_prefix ++ "xpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpI=\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "ƒ" ** 29,
     }, common_b64_prefix ++ "xpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLG\r\nkg==\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "ƒ" ** 200,
     }, common_b64_prefix ++
         "xpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLG\r\n" ++
@@ -642,14 +590,13 @@ test "Message: body base64" {
         "xpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLG\r\n" ++
         "ksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaS\r\n" ++
         "xpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLGksaSxpLG\r\n" ++
-        "kg==\r\n"
-    , .{});
+        "kg==\r\n", .{});
 }
 
 test "Message: body html" {
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .html_body = "<b>ƒ</b>",
     }, "From: <a>\r\n" ++
         "To: <b>\r\n" ++
@@ -658,12 +605,11 @@ test "Message: body html" {
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/html; charset=utf-8\r\n" ++
         "Content-Transfer-Encoding: base64\r\n\r\n" ++
-        "PGI+xpI8L2I+\r\n"
-    , .{});
+        "PGI+xpI8L2I+\r\n", .{});
 
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .html_body = "<b>h=i</b>",
     }, "From: <a>\r\n" ++
         "To: <b>\r\n" ++
@@ -672,14 +618,13 @@ test "Message: body html" {
         "Message-ID: <00000000000000000000000000000000@localhost>\r\n" ++
         "Content-Type: text/html; charset=utf-8\r\n" ++
         "Content-Transfer-Encoding: quoted-printable\r\n\r\n" ++
-        "<b>h=3Di</b>\r\n"
-    , .{});
+        "<b>h=3Di</b>\r\n", .{});
 }
 
 test "Message: body multipart" {
     try testWriteMessage(.{
-        .from = .{.address = "a"},
-        .to = &.{.{.address = "b"}},
+        .from = .{ .address = "a" },
+        .to = &.{.{ .address = "b" }},
         .text_body = "hello world!",
         .html_body = "<b>ƒ</b>",
     }, "From: <a>\r\n" ++
@@ -700,43 +645,44 @@ test "Message: body multipart" {
         "Content-Transfer-Encoding: base64\r\n" ++
         "\r\n" ++
         "PGI+xpI8L2I+\r\n" ++
-        "----00000000000000000000000000000000--\r\n"
-    , .{});
+        "----00000000000000000000000000000000--\r\n", .{});
 }
 
 test "Message: message-id" {
     try testWriteMessageContains(.{
-        .from = .{.address = "leto@example.com"},
-        .to = &.{.{.address = "b"}},
-    }, "\r\nMessage-ID: <00000000000000000000000000000000@fixed.example.org>\r\n"
-    , .{.message_id_host = "fixed.example.org"});
+        .from = .{ .address = "leto@example.com" },
+        .to = &.{.{ .address = "b" }},
+    }, "\r\nMessage-ID: <00000000000000000000000000000000@fixed.example.org>\r\n", .{ .message_id_host = "fixed.example.org" });
 
     try testWriteMessageContains(.{
-        .from = .{.address = "leto@example.com"},
-        .to = &.{.{.address = "b"}},
-    }, "\r\nMessage-ID: <00000000000000000000000000000000@example.com>\r\n"
-    , .{});
+        .from = .{ .address = "leto@example.com" },
+        .to = &.{.{ .address = "b" }},
+    }, "\r\nMessage-ID: <00000000000000000000000000000000@example.com>\r\n", .{});
 }
 
 fn testWriteMessage(m: Message, expected: []const u8, opts: Message.WriteOpts) !void {
-    var buf: std.ArrayList(u8) = .empty;
-    defer buf.deinit(t.allocator);
+    var aw: std.Io.Writer.Allocating = .init(t.allocator);
+    defer aw.deinit();
 
     var message_copy = m;
     if (m.timestamp == null) {
         message_copy.timestamp = 1736737238;
     }
-    try message_copy.write(buf.writer(t.allocator), t.random(), opts);
-    try t.expectString(expected, buf.items);
+    try message_copy.write(&aw.writer, t.random(), opts);
+    const output = try aw.toOwnedSlice();
+    defer t.allocator.free(output);
+    try t.expectString(expected, output);
 }
 
 fn testWriteMessageContains(m: Message, contains: []const u8, opts: Message.WriteOpts) !void {
-    var buf: std.ArrayList(u8) = .empty;
-    defer buf.deinit(t.allocator);
+    var aw: std.Io.Writer.Allocating = .init(t.allocator);
+    defer aw.deinit();
 
-    try m.write(buf.writer(t.allocator), t.random(), opts);
-    if (std.mem.indexOf(u8, buf.items, contains) == null) {
-        std.debug.print("Expected the message to contain: '{s}'.\n\nThe Full message is\n============\n{s}\n============\n", .{contains, buf.items});
+    try m.write(&aw.writer, t.random(), opts);
+    const output = try aw.toOwnedSlice();
+    defer t.allocator.free(output);
+    if (std.mem.indexOf(u8, output, contains) == null) {
+        std.debug.print("Expected the message to contain: '{s}'.\n\nThe Full message is\n============\n{s}\n============\n", .{ contains, output });
         return error.NotContained;
     }
 }
